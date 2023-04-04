@@ -41,7 +41,7 @@ make_output_table = function(df, output_fn, table_alignment){
   df = remove_duplicates(df, "Pathogen")
   latex_of_table = xtable(df, type = "latex", auto = TRUE)
   align(latex_of_table) <- table_alignment
-  print(latex_of_table, tabular.environment = "tabular", file = output_fn, include.rownames=FALSE)
+  print(latex_of_table, tabular.environment = "tabular", file = output_fn, include.rownames=FALSE,  sanitize.text.function=identity)
 }
 
 
@@ -282,7 +282,9 @@ ggsave(paste0(output_dir, "all_scores.png"), dpi=600, height=12, width=16)
 
 #### Tables ####
 ### Score table
+number_sigificant = 4
 score_table = score_summary %>% dplyr::select(Pathogen, Location, n_obs, Model, BIC, AIC, AICc, w)
+score_table = score_table %>% mutate_at(vars(BIC, AIC, AICc, w), funs(signif(., 4)))
 score_table = max_bold(score_table, "w")
 score_table = remove_duplicates(score_table, "n_obs")
 covid_table = score_table %>% dplyr::filter(Pathogen == "SARS-CoV-2")
@@ -293,6 +295,7 @@ make_output_table(not_covid_table, "Scores_table_not_covid.tex", "rllrlrrrr")
 ### Parameters table
 parms_summary_table = parms_summary %>% dplyr::select(Pathogen, Location, Model, Parameter, mle, X2.5., X25., X50., X75., X97.5., ess, Rhat) %>%
   dplyr::filter(Model %in% c("Negative Binomial", "Mixture")) 
+parms_summary_table = parms_summary_table %>% mutate_at(vars(mle, X2.5., X25., X50., X75., X97.5., ess, Rhat), funs(signif(., 4)))
 covid_table = parms_summary_table %>% dplyr::filter(Pathogen == "SARS-CoV-2")
 make_output_table(covid_table, "Parameters_table_covid.tex", "llccrrrrrrrrr")
 not_covid_table = parms_summary_table %>% dplyr::filter(Pathogen != "SARS-CoV-2")
