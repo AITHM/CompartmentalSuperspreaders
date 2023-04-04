@@ -1,4 +1,52 @@
 # Import utils and load required libraries
+remove_duplicates = function(df, column){
+  current = ""
+  for(i in 1:nrow(df)) {
+    row = df[i,]
+    if(row[column] != current){
+      current = row[column]
+    }
+    else{
+      df[i, column]= ""
+    }
+  }
+  return(df)
+}
+
+bold <- function(x) {paste('{\\textbf{',x,'}}', sep ='')}
+
+max_bold = function(df, bold_column){
+  current = df[1, "n_obs"]
+  position = 1
+  largest = as.numeric(df[1, bold_column])
+  for(i in 1:nrow(df)) {
+    row = df[i,]
+    if(row["n_obs"] != current){
+      df[position, bold_column] = bold(df[position, bold_column])
+      current = row["n_obs"]
+      largest = as.numeric(row[bold_column])
+      position = i
+    }
+    else if(as.numeric(row[bold_column]) > largest){
+      largest = as.numeric(row[bold_column])
+      position = i
+    }
+  }
+  return(df)
+}
+
+make_output_table = function(df, output_fn, table_alignment){
+  df = remove_duplicates(df, "Location")
+  df = remove_duplicates(df, "Model")
+  df = remove_duplicates(df, "Pathogen")
+  latex_of_table = xtable(df, type = "latex", auto = TRUE)
+  align(latex_of_table) <- table_alignment
+  print(latex_of_table, tabular.environment = "tabular", file = output_fn, include.rownames=FALSE)
+}
+
+
+
+
 source("outputs/plot_utils.R")
 
 
@@ -234,15 +282,26 @@ ggsave(paste0(output_dir, "all_scores.png"), dpi=600, height=12, width=16)
 
 #### Tables ####
 ### Score table
-score_table = score_summary %>%
-  dplyr::select(Pathogen, Location, n_obs, Model, ℓₘₐₓ, BIC, AIC, AICc, w) %>%
-  xtable(include.rownames=FALSE)
+score_table = score_summary %>% dplyr::select(Pathogen, Location, n_obs, Model, BIC, AIC, AICc, w)
+score_table = max_bold(score_table, "w")
+score_table = remove_duplicates(score_table, "n_obs")
+covid_table = score_table %>% dplyr::filter(Pathogen == "SARS-CoV-2")
+make_output_table(covid_table, "Scores_table_covid.tex", "rlllrrrrr")
+not_covid_table = score_table %>% dplyr::filter(Pathogen != "SARS-CoV-2")
+make_output_table(not_covid_table, "Scores_table_not_covid.tex", "rllrlrrrr")
 
 ### Parameters table
-parms_table = parms_summary %>%
-  dplyr::select(Pathogen, Location, Model, Parameter, mle, X2.5., X25., X50., X75., X97.5., ess, Rhat) %>%
-  dplyr::filter(Model %in% c("Negative Binomial", "Mixture")) %>%
-  xtable(include.rownames=FALSE)
+parms_summary_table = parms_summary %>% dplyr::select(Pathogen, Location, Model, Parameter, mle, X2.5., X25., X50., X75., X97.5., ess, Rhat) %>%
+  dplyr::filter(Model %in% c("Negative Binomial", "Mixture")) 
+covid_table = parms_summary_table %>% dplyr::filter(Pathogen == "SARS-CoV-2")
+make_output_table(covid_table, "Parameters_table_covid.tex", "llccrrrrrrrrr")
+not_covid_table = parms_summary_table %>% dplyr::filter(Pathogen != "SARS-CoV-2")
+make_output_table(not_covid_table, "Parameters_table_not_covid.tex", "llccrrrrrrrrr")
+
+#parms_table = parms_summary %>%
+  #dplyr::select(Pathogen, Location, Model, Parameter, mle, X2.5., X25., X50., X75., X97.5., ess, Rhat) %>%
+  #dplyr::filter(Model %in% c("Negative Binomial", "Mixture")) %>%
+  #xtable(include.rownames=FALSE)
 
 
 #### Posterior plots ###
@@ -282,7 +341,7 @@ ggsave(paste0(output_dir, "R_v_c_posterior.png"), dpi=600, height=10, width=16)
 ## Plot R v. ρ
 full_chain %>%
   filter(Model == "Mixture") %>%
-  ggplot(aes(x= R, y= ρ, col=Pathogen)) +
+  ggplot(aes(x= R, y=ρ, col=Pathogen)) +
   geom_point(alpha=0.5) +
   # geom_density_2d(bins=4) +
   geom_vline(xintercept=1, lty=2) +
