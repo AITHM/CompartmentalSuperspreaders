@@ -6,6 +6,7 @@ R_prior = Gamma(2, 1)
 α_prior = Exponential(1)
 ρ_prior = Uniform()
 c_prior = Uniform()
+σ_prior = Uniform()
 
 
 #### Model likelihoods ####
@@ -25,6 +26,28 @@ function ℓ_offspring(Z, n, R, α, c, ρ)
     for l in eachindex(Z)
         s = (1 - c) * p[1]^α * (1 - p[1])^Z[l] + c * p[2]^α * (1 - p[2])^Z[l]
         loglik += n[l] * (log(s) + loggamma(Z[l] + α) - logfactorial(Z[l]))
+    end
+    return loglik
+end
+
+
+# Single-type variable
+function ℓ_variable(Z, n, R, σ)
+    loglik = sum(n) * ( log(1. + σ) - log(1. - σ) - log(R) )
+    for i in eachindex(Z)
+        loglik += n[i] * log( (R / (1 + σ + R))^(Z[i] + 1) - (σ * R / (1. + σ + σ * R))^(Z[i] + 1) )
+    end
+    return loglik
+end
+
+
+# Multi-type variable
+function ℓ_variable(Z, n, R, σ, c, ρ)
+    σ == 1. && return ℓ_offspring(Z, n, R, 2, c, ρ)
+    R₁, R₂ = split_R(R, c, ρ)
+    loglik = sum(n) * ( log(1. + σ) - log(1. - σ) )
+    for i in eachindex(Z)
+        loglik += n[i] * log( (1. - c) * 1. / R₁ * ( (R₁ / (1 + σ + R₁))^(Z[i] + 1) - (σ * R₁ / (1. + σ + σ * R₁))^(Z[i] + 1) ) + c * 1. / R₂ * ( (R₂ / (1 + σ + R₂))^(Z[i] + 1) - (σ * R₂ / (1. + σ + σ * R₂))^(Z[i] + 1) ) )
     end
     return loglik
 end
@@ -59,11 +82,24 @@ end
 
 
 # Clinical model (one subspreader type + one superspreader type with fixed proportion in each)
-function ℓ(prob::ClinicalOffspring, R, ρ)
+function ℓ(prob::ClinicalOffspring, R, σ, ρ)
     @unpack Z, n, α, c = prob
-    return ℓ_offspring(Z, n, R, α, c, ρ)
+    return ℓ_variable(Z, n, R, σ, c, ρ)
 end
 
+
+# Single-type variable model
+function ℓ(prob::Variable1Offspring, R, σ)
+    @unpack Z, n = prob
+    return ℓ_variable(Z, n, R, σ)
+end
+
+
+# Two-type variable model
+function ℓ(prob::Variable2Offspring, R, σ, c, ρ)
+    @unpack Z, n = prob
+    return ℓ_variable(Z, n, R, σ, c, ρ)
+end
 
 
 #### Fitting functions ####
@@ -117,13 +153,37 @@ end
 
 # Make the type callable
 function (prob::ClinicalOffspring)(θ)
-    R, ρ = θ    # extract parameters
-    ℓ(prob, R, ρ) + logpdf(R_prior, R) + logpdf(ρ_prior, ρ)
+    R, σ, ρ = θ    # extract parameters
+    ℓ(prob, R, σ, ρ) + logpdf(R_prior, R) + logpdf(σ_prior, σ) + logpdf(ρ_prior, ρ)
 end
 
 # Define transformation for parameters
 function transformation(prob::ClinicalOffspring)
-    as((R = asℝ₊, ρ = as𝕀))
+    as((R = asℝ₊, σ = as𝕀, ρ = as𝕀))
+end
+
+
+# Make the type callable
+function (prob::Variable1Offspring)(θ)
+    R, σ = θ    # extract parameters
+    ℓ(prob, R, σ) + logpdf(R_prior, R) + logpdf(σ_prior, σ)
+end
+
+# Define transformation for parameters
+function transformation(prob::Variable1Offspring)
+    as((R = asℝ₊, σ = as𝕀))
+end
+
+
+# Make the type callable
+function (prob::Variable2Offspring)(θ)
+    R, σ, c, ρ = θ    # extract parameters
+    ℓ(prob, R, σ, c, ρ) + logpdf(R_prior, R) + logpdf(σ_prior, σ) + logpdf(c_prior, c) + logpdf(ρ_prior, ρ)
+end
+
+# Define transformation for parameters
+function transformation(prob::Variable2Offspring)
+    as((R = asℝ₊, σ = as𝕀, c = as𝕀, ρ = as𝕀))
 end
 
 
@@ -184,12 +244,34 @@ end
 
 function fit_mle(prob::ClinicalOffspring)
     @unpack Z, n, α, c = prob
+    opt = Opt(:LN_SBPLX, 3)
+    opt.lower_bounds = [0., 0., 0.]
+    opt.upper_bounds = [Inf, 1., 1.]
+    opt.xtol_rel = 1e-4
+    opt.max_objective = (x,grad) -> ℓ(prob, x...)
+    return NLopt.optimize(opt, [Z' * n / sum(n), 0.1, 0.3])
+end
+
+
+function fit_mle(prob::Variable1Offspring)
+    @unpack Z, n = prob
     opt = Opt(:LN_SBPLX, 2)
     opt.lower_bounds = [0., 0.]
     opt.upper_bounds = [Inf, 1.]
     opt.xtol_rel = 1e-4
     opt.max_objective = (x,grad) -> ℓ(prob, x...)
-    return NLopt.optimize(opt, [Z' * n / sum(n), 0.3])
+    return NLopt.optimize(opt, [Z' * n / sum(n), 0.1])
+end
+
+
+function fit_mle(prob::Variable2Offspring)
+    @unpack Z, n = prob
+    opt = Opt(:LN_SBPLX, 4)
+    opt.lower_bounds = [0., 0., eps(), eps()]
+    opt.upper_bounds = [Inf, 1., 1. - eps(), 1. - eps()]
+    opt.xtol_rel = 1e-4
+    opt.max_objective = (x,grad) -> ℓ(prob, x...)
+    return NLopt.optimize(opt, [Z' * n / sum(n), 0.1, 0.1, 0.01])
 end
 
 
@@ -239,6 +321,24 @@ function fit(prob::ClinicalOffspring; iter=1_000, n_chains=5, reporter=NoProgres
 end
 
 
+function fit(prob::Variable1Offspring; iter=1_000, n_chains=5, reporter=NoProgressReport())
+    ℓₘₐₓ, xₘₗₑ, ret = fit_mle(prob)
+    mle = Variable1Parameters(xₘₗₑ...)
+    posterior, ess, R̂ = fit_mcmc(prob, iter=iter, n_chains=n_chains, reporter=reporter)
+    mcmc = [Variable1Parameters(posterior[i]...) for i in eachindex(posterior)]
+    return Solution(mle, mcmc, ess, R̂), Scores(sum(prob.n), length(xₘₗₑ), ℓₘₐₓ)
+end
+
+
+function fit(prob::Variable2Offspring; iter=1_000, n_chains=5, reporter=NoProgressReport())
+    ℓₘₐₓ, xₘₗₑ, ret = fit_mle(prob)
+    mle = Variable2Parameters(xₘₗₑ...)
+    posterior, ess, R̂ = fit_mcmc(prob, iter=iter, n_chains=n_chains, reporter=reporter)
+    mcmc = [Variable2Parameters(posterior[i]...) for i in eachindex(posterior)]
+    return Solution(mle, mcmc, ess, R̂), Scores(sum(prob.n), length(xₘₗₑ), ℓₘₐₓ)
+end
+
+
 
 function fit_offspring_ensemble(dataset, α_table, c_table; dir=".\\data\\offspring\\", iter=1_000, n_chains=5, reporter=NoProgressReport())
     # Read in data
@@ -251,9 +351,11 @@ function fit_offspring_ensemble(dataset, α_table, c_table; dir=".\\data\\offspr
     z_sol, z_scores = fit(ZeroInfOffspring(data, α_table[pathogen]), iter=iter, n_chains=n_chains, reporter=reporter)
     m_sol, m_scores = fit(MixtureOffspring(data, α_table[pathogen]), iter=iter, n_chains=n_chains, reporter=reporter)
     c_sol, c_scores = fit(ClinicalOffspring(data, α_table[pathogen], c_table[pathogen]), iter=iter, n_chains=n_chains, reporter=reporter)
+    v1_sol, v1_scores = fit(Variable1Offspring(data), iter=iter, n_chains=n_chains, reporter=reporter)
+    v2_sol, v2_scores = fit(Variable2Offspring(data), iter=iter, n_chains=n_chains, reporter=reporter)
 
     # Concatenate model results
-    all_sol = [n_sol, e_sol, z_sol, m_sol, c_sol]
+    all_sol = [n_sol, e_sol, z_sol, m_sol, c_sol, v1_sol, v2_sol]
     parms_summ = vcat(combine_sol.(all_sol)...)
     parms_summ = hcat(DataFrame(Dataset = fill(dataset, nrow(parms_summ))), parms_summ)
 
@@ -261,15 +363,17 @@ function fit_offspring_ensemble(dataset, α_table, c_table; dir=".\\data\\offspr
                  DataFrame(e_sol.mcmc, complete=true, α=α_table[pathogen]),
                  DataFrame(z_sol.mcmc, complete=true, α=α_table[pathogen]),
                  DataFrame(m_sol.mcmc, complete=true, α=α_table[pathogen]),
-                 DataFrame(c_sol.mcmc, complete=true, α=α_table[pathogen], c=c_table[pathogen]))
+                 DataFrame(c_sol.mcmc, complete=true, α=α_table[pathogen], c=c_table[pathogen]),
+                 DataFrame(v1_sol.mcmc, complete=true),
+                 DataFrame(v2_sol.mcmc, complete=true))
 
     chain = hcat(DataFrame(Dataset = fill(dataset, nrow(chain))), chain)
 
     # Calculate weights for each model
-    all_scores = [n_scores, e_scores, z_scores, m_scores, c_scores]
+    all_scores = [n_scores, e_scores, z_scores, m_scores, c_scores, v1_scores, v2_scores]
     weights = get_weights(all_scores)
-    score_summ = DataFrame(hcat(fill(dataset, 5),
-                                [:NegBin, :Erlang, :ZeroInf, :Mixture, :Clinical],
+    score_summ = DataFrame(hcat(fill(dataset, 7),
+                                [:NegBin, :Erlang, :ZeroInf, :Mixture, :Clinical, :SingleType, :TwoType],
                                 map(f -> getfield.(all_scores, f), fieldnames(Scores))..., 
                                 weights), 
                            vcat([:Dataset, :Model], fieldnames(Scores)..., [:w]))
@@ -282,57 +386,10 @@ function fit_offspring_ensemble(dataset, α_table, c_table; dir=".\\data\\offspr
                      DataFrame(Model = fill(:Erlang, Z_max+1), Z = Z_array, n = exp.(ℓ_offspring.(Z_array, 1, e_sol.mle.R, α_table[pathogen])) .* n_tot),
                      DataFrame(Model = fill(:ZeroInf, Z_max+1), Z = Z_array, n = exp.(ℓ_offspring.(Z_array, 1, z_sol.mle.R, α_table[pathogen], z_sol.mle.c, 0.)) .* n_tot),
                      DataFrame(Model = fill(:Mixture, Z_max+1), Z = Z_array, n = exp.(ℓ_offspring.(Z_array, 1, m_sol.mle.R, α_table[pathogen], m_sol.mle.c, m_sol.mle.ρ)) .* n_tot),
-                     DataFrame(Model = fill(:Clinical, Z_max+1), Z = Z_array, n = exp.(ℓ_offspring.(Z_array, 1, c_sol.mle.R, α_table[pathogen], c_table[pathogen], c_sol.mle.ρ)) .* n_tot))
+                     DataFrame(Model = fill(:Clinical, Z_max+1), Z = Z_array, n = exp.(ℓ_offspring.(Z_array, 1, c_sol.mle.R, α_table[pathogen], c_table[pathogen], c_sol.mle.ρ)) .* n_tot),
+                     DataFrame(Model = fill(:SingleType, Z_max+1), Z = Z_array, n = exp.(ℓ_variable.(Z_array, 1, v1_sol.mle.R, v1_sol.mle.σ)) .* n_tot),
+                     DataFrame(Model = fill(:TwoType, Z_max+1), Z = Z_array, n = exp.(ℓ_variable.(Z_array, 1, v2_sol.mle.R, v2_sol.mle.σ, v2_sol.mle.c, v2_sol.mle.ρ)) .* n_tot))
     model_fit = hcat(DataFrame(Dataset = fill(dataset, nrow(model_fit))), model_fit)                 
 
     return parms_summ, score_summ, chain, model_fit
 end
-
-"""
-
-
-# Loop over all offspring datasets
-α = 2
-α_table = Dict("SARS-CoV-2" => α,
-               "Ebola" => α,
-               "Hantavirus" => α,
-               "Measles" => α,
-               "MERS-CoV" => α,
-               "Mpox" => α,
-               "SARS-CoV-1" => α,
-               "Smallpox" => α,
-               "Tuberculosis" => α)
-
-c_table = Dict("SARS-CoV-2" => 0.649,
-               "Ebola" => 0.729,
-               "Hantavirus" => 1.,
-               "Measles" => 0.5,
-               "MERS-CoV" => 0.898,
-               "Mpox" => 0.898,
-               "SARS-CoV-1" => 0.867,
-               "Smallpox" => 1.,
-               "Tuberculosis" => 0.496)
-
-offspring_datasets =  [chop(dat, tail=4) for dat in readdir(".\\data\\offspring\\") if last(dat, 3) == "csv"]
-
-
-out = map(x -> fit_offspring_ensemble(x, α_table, c_table), offspring_datasets)
-CSV.write(".\\outputs\\offspring\\parm_summary_k5.csv", vcat(getfield.(out, 1)...))
-CSV.write(".\\outputs\\offspring\\score_summary_k5.csv", vcat(getfield.(out, 2)...))
-CSV.write(".\\outputs\\offspring\\full_chain_k5.csv", vcat(getfield.(out, 3)...))
-
-
-
-
-
-# Fit to segregated symptomatic v. asymptomatic data
-clinical_datasets =  [chop(dat, tail=4) for dat in readdir(".\\data\\offspring\\clinical\\") if last(dat, 3) == "csv"]
-
-
-out = map(x -> fit_ensemble(x, dir=".\\data\\offspring\\clinical\\"), clinical_datasets)
-
-
-CSV.write(".\\outputs\\offspring\\clinical\\parm_summary.csv", vcat(getfield.(out, 1)...))
-CSV.write(".\\outputs\\offspring\\clinical\\score_summary.csv", vcat(getfield.(out, 2)...))
-CSV.write(".\\outputs\\offspring\\clinical\\full_chain.csv", vcat(getfield.(out, 3)...))
-"""

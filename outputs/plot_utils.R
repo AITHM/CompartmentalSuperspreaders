@@ -23,7 +23,7 @@ pathogen_levels = factor(pathogen_levels, levels = pathogen_levels)
 scale_fill_pathogen <- function(...){
   ggplot2:::manual_scale(
     'fill', 
-    values = setNames(c("#ADB6B6", "#ED0000", "#42B540", "#0099B4", "#925E9F", "#FDAF91", "#ADB6B6", "#AD002A"), pathogen_levels), 
+    values = setNames(c("#ADB6B6", "#FDAF91", "#42B540","#91D1C2B2", "#E18727FF", "#EE4C97FF", "#ADB6B6", "#FED439"), pathogen_levels), 
     drop=T,
     ...
   )
@@ -33,7 +33,7 @@ scale_fill_pathogen <- function(...){
 scale_col_pathogen <- function(...){
   ggplot2:::manual_scale(
     'col', 
-    values = setNames(c("#ADB6B6", "#ED0000", "#42B540", "#0099B4", "#925E9F", "#FDAF91", "#ADB6B6", "#AD002A"), pathogen_levels), 
+    values = setNames(c("#ADB6B6", "#FDAF91", "#42B540", "#91D1C2B2", "#E18727FF", "#EE4C97FF", "#ADB6B6", "#FED439"), pathogen_levels), 
     ...
   )
 }
@@ -129,22 +129,26 @@ relabel_clusters = function(x, levels=cluster_labels){
 }
 
 
-model_levels = c("Negative Binomial", "Erlang", "Zero-inflated", "Mixture", "Clinical")
+model_levels = c("Negative Binomial", "Two-type",  "SEIR(2)", "Zero-inflated", "Clinical", "Single-type", "SEIR(1)")
 
 
 relabel_model = function(x, levels=model_levels){
-  case_when(x == "Erlang" ~ levels[2],
+  case_when(x == "Erlang" ~ levels[7],
             x == "NegBin" ~ levels[1],
-            x == "ZeroInf" ~ levels[3],
-            x == "Mixture" ~ levels[4],
-            x == "Clinical" ~ levels[5]) %>% factor(levels)
+            x == "ZeroInf" ~ levels[4],
+            x == "Mixture" ~ levels[3],
+            x == "Clinical" ~ levels[5],
+            x == "SingleType" ~ levels[6],
+            x == "TwoType" ~ levels[2],
+            x == "Variable1" ~ levels[6],
+            x == "Variable2" ~ levels[2]) %>% factor(levels)
 }
 
 
 scale_shape_model <- function(...){
   ggplot2:::manual_scale(
     'shape', 
-    values = setNames(c(16,4,18,17,15), model_levels), 
+    values = setNames(c(19,17,3,18,15,6,4), model_levels), 
     ...
   )
 }
@@ -153,7 +157,7 @@ scale_shape_model <- function(...){
 scale_col_model <- function(...){
   ggplot2:::manual_scale(
     'col', 
-    values = setNames(c("#00468B", "#0099B4", "#925E9F", "#AD002A", "#1B1919"), model_levels), 
+    values = setNames(c("#1B1919", "#00468B", "#42B540", "#ADB6B6", "#AD002A", "#0099B4", "#925E9F"), model_levels), 
     ...
   )
 }

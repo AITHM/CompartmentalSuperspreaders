@@ -59,6 +59,21 @@ end
 
 struct ClinicalParameters <: Parameters
     R::Float64
+    σ::Float64
+    ρ::Float64
+end
+
+
+struct Variable1Parameters <: Parameters
+    R::Float64
+    σ::Float64
+end
+
+
+struct Variable2Parameters <: Parameters
+    R::Float64
+    σ::Float64
+    c::Float64
     ρ::Float64
 end
 
@@ -115,7 +130,7 @@ end
 import DataFrames.DataFrame
 
 
-function DataFrame(chain::Vector{ErlangParameters}; complete=true, α=2)
+function DataFrame(chain::Vector{ErlangParameters}; complete=true, α=1)
     n = length(chain)
     df = DataFrame(hcat(fill("Erlang", n), hcat(extract_values.(chain)...)'), vcat(:Model, [fname for fname in fieldnames(ErlangParameters)]))
     df[!, :q] = extinction_prob.(chain, α)
@@ -123,56 +138,86 @@ function DataFrame(chain::Vector{ErlangParameters}; complete=true, α=2)
         df[!, :α] = fill(-1., n)
         df[!, :c] = fill(-1., n)
         df[!, :ρ] = fill(-1., n)
+        df[!, :σ] .= -1.
     end
     return df
 end
 
 
-function DataFrame(chain::Vector{NegBinParameters}; complete=true, α=2)
+function DataFrame(chain::Vector{NegBinParameters}; complete=true, α=1)
     n = length(chain)
     df = DataFrame(hcat(fill("NegBin", n), hcat(extract_values.(chain)...)'), vcat(:Model, [fname for fname in fieldnames(NegBinParameters)]))
     df[!, :q] = extinction_prob.(chain, df.α)
     if complete
         df[!, :c] = fill(-1., n)
         df[!, :ρ] = fill(-1., n)
+        df[!, :σ] .= -1.
     end
     return df
 end
 
 
-function DataFrame(chain::Vector{ZeroInfParameters}; complete=true, α=2)
+function DataFrame(chain::Vector{ZeroInfParameters}; complete=true, α=1)
     n = length(chain)
     df = DataFrame(hcat(fill("ZeroInf", n), hcat(extract_values.(chain)...)'), vcat(:Model, [fname for fname in fieldnames(ZeroInfParameters)]))
     df[!, :q] = extinction_prob.(chain, α)
     if complete
         df[!, :α] = fill(-1., n)
         df[!, :ρ] = fill(-1., n)
+        df[!, :σ] .= -1.
     end
     return df
 end
 
 
-function DataFrame(chain::Vector{MixtureParameters}; complete=true, α=2)
+function DataFrame(chain::Vector{MixtureParameters}; complete=true, α=1)
     n = length(chain)
     df = DataFrame(hcat(fill("Mixture", n), hcat(extract_values.(chain)...)'), vcat(:Model, [fname for fname in fieldnames(MixtureParameters)]))
     df[!, :q] = extinction_prob.(chain, α)
     if complete
         df[!, :α] = fill(-1., n)
+        df[!, :σ] .= -1.
     end
     return df
 end
 
 
-function DataFrame(chain::Vector{ClinicalParameters}; complete=true, α=2, c=1.)
+function DataFrame(chain::Vector{ClinicalParameters}; complete=true, α=1, c=1.)
     n = length(chain)
     df = DataFrame(hcat(fill("Clinical", n), hcat(extract_values.(chain)...)'), vcat(:Model, [fname for fname in fieldnames(ClinicalParameters)]))
     df[!, :q] = extinction_prob.(chain, α, c)
     if complete
         df[!, :α] = fill(-1., n)
         df[!, :c] = fill(c, n)
+        # df[!, :σ] .= -1.
     end
     return df
 end
+
+
+function DataFrame(chain::Vector{Variable1Parameters}; complete=true, α=1, c=1.)
+    n = length(chain)
+    df = DataFrame(hcat(fill("Variable1", n), hcat(extract_values.(chain)...)'), vcat(:Model, [fname for fname in fieldnames(Variable1Parameters)]))
+    df[!, :q] = extinction_prob.(chain)
+    if complete
+        df[!, :α] = fill(-1., n)
+        df[!, :c] = fill(c, n)
+        df[!, :ρ] = fill(-1., n)
+    end
+    return df
+end
+
+
+function DataFrame(chain::Vector{Variable2Parameters}; complete=true, α=1, c=1.)
+    n = length(chain)
+    df = DataFrame(hcat(fill("Variable2", n), hcat(extract_values.(chain)...)'), vcat(:Model, [fname for fname in fieldnames(Variable2Parameters)]))
+    df[!, :q] = extinction_prob.(chain)
+    if complete
+        df[!, :α] = fill(-1., n)
+    end
+    return df
+end
+
 
 
 #### Problems ####
@@ -227,3 +272,21 @@ struct ClinicalOffspring <: OffspringProblem
 end
 
 ClinicalOffspring(df::DataFrame, α, c) = ClinicalOffspring(df.Z, df.n, α, c)
+
+
+## Variable1 model
+struct Variable1Offspring <: OffspringProblem
+    Z::Vector{Int64}     # offspring
+    n::Vector{Int64}     # frequency of Z
+end
+
+Variable1Offspring(df::DataFrame) = Variable1Offspring(df.Z, df.n)
+
+
+## Variable2 model
+struct Variable2Offspring <: OffspringProblem
+    Z::Vector{Int64}     # offspring
+    n::Vector{Int64}     # frequency of Z
+end
+
+Variable2Offspring(df::DataFrame) = Variable2Offspring(df.Z, df.n)

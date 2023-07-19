@@ -1,4 +1,4 @@
-α = 2
+α = 1
 α_table = Dict("SARS-CoV-2" => α,
                "EBV" => α,
                "Hantavirus" => α,

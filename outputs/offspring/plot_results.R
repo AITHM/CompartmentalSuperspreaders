@@ -1,52 +1,4 @@
 # Import utils and load required libraries
-remove_duplicates = function(df, column){
-  current = ""
-  for(i in 1:nrow(df)) {
-    row = df[i,]
-    if(row[column] != current){
-      current = row[column]
-    }
-    else{
-      df[i, column]= ""
-    }
-  }
-  return(df)
-}
-
-bold <- function(x) {paste('{\\textbf{',x,'}}', sep ='')}
-
-max_bold = function(df, bold_column){
-  current = df[1, "n_obs"]
-  position = 1
-  largest = as.numeric(df[1, bold_column])
-  for(i in 1:nrow(df)) {
-    row = df[i,]
-    if(row["n_obs"] != current){
-      df[position, bold_column] = bold(df[position, bold_column])
-      current = row["n_obs"]
-      largest = as.numeric(row[bold_column])
-      position = i
-    }
-    else if(as.numeric(row[bold_column]) > largest){
-      largest = as.numeric(row[bold_column])
-      position = i
-    }
-  }
-  return(df)
-}
-
-make_output_table = function(df, output_fn, table_alignment){
-  df = remove_duplicates(df, "Location")
-  df = remove_duplicates(df, "Model")
-  df = remove_duplicates(df, "Pathogen")
-  latex_of_table = xtable(df, type = "latex", auto = TRUE)
-  align(latex_of_table) <- table_alignment
-  print(latex_of_table, tabular.environment = "tabular", file = output_fn, include.rownames=FALSE,  sanitize.text.function=identity)
-}
-
-
-
-
 source("outputs/plot_utils.R")
 
 
@@ -118,14 +70,15 @@ model_accum = summarize_df %>%
   group_by(Model, Label, Zalt, Pathogen) %>%
   summarize(count = sum(n), .groups = "drop") %>%
   replace_na(list(count = 0)) %>%
-  filter(Model %in% c("Negative Binomial", "Mixture", "Clinical"))
+  filter(Model %in% c("Negative Binomial", "Two-type", "Clinical"))
 
 max.offspring = offspring %>%
   group_by(Dataset) %>%
   summarize(Max.n = max(n))
 
 score_text = score_summary %>%
-  filter(Model %in% c("Negative Binomial", "Mixture", "Clinical")) %>%
+  arrange(Dataset, Model) %>%
+  filter(Model %in% c("Negative Binomial", "Two-type", "Clinical")) %>%
   mutate(n = as.vector(sapply(max.offspring$Max.n, function(x) x * c(0.9, 0.7, 0.5))),
          wr = paste0("w = ", round(w, 2)),
          aiccs = paste0("AICc = ", signif(AICc, 4)))
@@ -138,8 +91,8 @@ score_text$Zalt = 10.5
 
 ggplot(model_accum, aes(x=Zalt)) +
   geom_bar(data=offspring_accum, aes(weight=count, fill=Pathogen), alpha=1.) + 
-  geom_point(aes(y = count, col=Model, shape=Model), size=3) +
-  geom_line(aes(y = count, group=Model, col=Model, lty=Model), lwd=1) + 
+  geom_point(aes(y = count, col=Model, shape=Model), size=3, alpha=0.7) +
+  geom_line(aes(y = count, group=Model, col=Model, lty=Model), lwd=1, alpha=0.7) +
   geom_text(data=score_text, aes(y=n, label=aiccs, col=Model), size=6, family="serif") +
   facet_wrap(Label ~ ., scales="free") +
   xlab("Secondary cases (Z)") +
@@ -163,7 +116,7 @@ ggsave(paste0(output_dir, "offspring_fits.png"), dpi=600, width=14, height=14)
 
 ## Plot R for each model * dataset ##
 parms_summary %>%
-  filter(Parameter=="R") %>%
+  filter(Parameter=="R", Model %in% c("Negative Binomial", "Two-type", "Clinical")) %>%
   ggplot(aes(x = Label, col=Pathogen, shape=Model)) +
   geom_linerange(aes(ymin = X2.5., ymax=X97.5.),position=position_dodge2(width=0.75), lwd=2, alpha=0.3) +
   geom_linerange(aes(ymin = X25., ymax=X75.), position=position_dodge2(width=0.75), lwd=2, alpha=0.6) +
@@ -191,7 +144,7 @@ parms_summary %>%
   ylab(expression(Dispersion~(k[NB]))) +
   # ylab(Tex("Dispersion parameter, $k_{NB}$")) +
   custom_theme + theme(axis.text.x = element_text(angle = 60, hjust=1)) +
-  scale_y_continuous(trans="log10", breaks = c(0.01, 0.03, 0.1, 0.3, 1., 3.)) +
+  scale_y_continuous(trans="log10", breaks = c(0.01, 0.05, 0.1, 0.5, 1., 5.)) +
   # scale_y_log10(
   #   # breaks = c(0.01, 0.03, 0.1, 0.3, 1., 3.),
   #   breaks = scales::trans_breaks("log10", function(x) 10^x),
@@ -209,14 +162,16 @@ ggsave(paste0(output_dir, "k_negbin.png"), dpi=600, width=12, height=7.5)
 
 ### Superspreader fraction + relative transmissibility ###
 parms_summary %>%
-  filter(Parameter==c("c", "ρ"), Model %in% c("Mixture")) %>%
-  ggplot(aes(x = Label, col=Pathogen, shape=Parameter)) +
+  filter(Parameter %in% c("c", "ρ"), Model %in% c("Two-type")) %>%
+  ggplot(aes(x = Label, col=Pathogen)) +
   geom_linerange(aes(ymin = X2.5., ymax=X97.5.),position=position_dodge2(width=0.5), lwd=2, alpha=0.3) +
   geom_linerange(aes(ymin = X25., ymax=X75.), position=position_dodge2(width=0.5), lwd=2, alpha=0.6) +
   geom_point(aes(y=X50.), position=position_dodge2(width=0.5), size=3) +
+  # facet_grid(Parameter ~ .) +
   xlab("") +
+  ylab("") +
   ylab("Superspreader fraction (c)\nRelative transmissibility (ρ)") +
-  custom_theme + theme(axis.text.x = element_text(angle = 60, hjust=1), legend.position = c(0.25,0.7)) +
+  custom_theme + theme(axis.text.x = element_text(angle = 60, hjust=1), legend.position = "bottom") +
   # scale_y_continuous(trans="log10") +
   scale_y_continuous(labels=scales::percent) +
   scale_col_pathogen() +
@@ -227,10 +182,29 @@ ggsave(paste0(output_dir, "c_rho.png"), dpi=600, width=12, height=7.5)
 
 
 
+
+parms_summary %>%
+  filter(Parameter %in% c("σ"), Model %in% c("Two-type")) %>%
+  ggplot(aes(x = Label, col=Pathogen)) +
+  geom_linerange(aes(ymin = X2.5., ymax=X97.5.),position=position_dodge2(width=0.5), lwd=2, alpha=0.3) +
+  geom_linerange(aes(ymin = X25., ymax=X75.), position=position_dodge2(width=0.5), lwd=2, alpha=0.6) +
+  geom_point(aes(y=X50.), position=position_dodge2(width=0.5), size=3) +
+  xlab("") +
+  ylab("") +
+  ylab("Relative transmissibility (σ)") +
+  custom_theme + theme(axis.text.x = element_text(angle = 60, hjust=1), legend.position = "right") +
+  scale_y_continuous(labels=scales::percent) +
+  scale_col_pathogen()
+
+
+ggsave(paste0(output_dir, "sigma.png"), dpi=600, width=12, height=7.5)
+
+
+
 #### Derived parameters ####
 ### Extinction probability
 full_chain %>%
-  filter(Model != "Erlang") %>%
+  filter(Model %in% c("Negative Binomial", "Two-type", "Clinical")) %>%
   group_by(Label, Pathogen, Model) %>%
   summarize(lower025 = quantile(q, 0.025),
             lower25 = quantile(q, 0.25),
@@ -242,7 +216,7 @@ full_chain %>%
   geom_linerange(aes(ymin = lower025, ymax=upper975), position=position_dodge2(width=0.75), lwd=2, alpha=0.3) +
   geom_linerange(aes(ymin = lower25, ymax=upper975), position=position_dodge2(width=0.75), lwd=2, alpha=0.6) +
   geom_hline(yintercept=0.20923955891032855, lty=2) +
-  annotate("text", x=3, y=0.17, size=6, label="Erlang prediction", family="serif") +
+  annotate("text", x=5, y=0.17, size=6, label="Homogeneous limit", family="serif") +
   xlab("") +
   ylab("Extinction probability (q)") +
   scale_y_continuous(labels=scales::percent, limits = c(0,1), breaks = seq(0,1,0.1)) +
@@ -282,24 +256,24 @@ ggsave(paste0(output_dir, "all_scores.png"), dpi=600, height=12, width=16)
 
 #### Tables ####
 ### Score table
-number_sigificant = 4
-score_table = score_summary %>% dplyr::select(Pathogen, Location, n_obs, Model, BIC, AIC, AICc, w)
-score_table = score_table %>% mutate_at(vars(BIC, AIC, AICc, w), funs(signif(., 4)))
-score_table = max_bold(score_table, "w")
+# number_sigificant = 4
+score_table = score_summary %>% dplyr::select(Pathogen, Location, n_obs, Model, ℓₘₐₓ, BIC, AIC, AICc, w)
+# score_table = score_table %>% mutate_at(vars(BIC, AIC, AICc, w), funs(signif(., 4)))
+# score_table = max_bold(score_table, "w")
 score_table = remove_duplicates(score_table, "n_obs")
 covid_table = score_table %>% dplyr::filter(Pathogen == "SARS-CoV-2")
-make_output_table(covid_table, "Scores_table_covid.tex", "rlllrrrrr")
+make_output_table(covid_table, "Scores_table_covid.tex", "rllrcrrrrr", c(0,0,0,0,0,1,1,1,1,3))
 not_covid_table = score_table %>% dplyr::filter(Pathogen != "SARS-CoV-2")
-make_output_table(not_covid_table, "Scores_table_not_covid.tex", "rllrlrrrr")
+make_output_table(not_covid_table, "Scores_table_not_covid.tex", "rllrcrrrrr", c(0,0,0,0,0,1,1,1,1,3))
 
 ### Parameters table
 parms_summary_table = parms_summary %>% dplyr::select(Pathogen, Location, Model, Parameter, mle, X2.5., X25., X50., X75., X97.5., ess, Rhat) %>%
   dplyr::filter(Model %in% c("Negative Binomial", "Mixture")) 
-parms_summary_table = parms_summary_table %>% mutate_at(vars(mle, X2.5., X25., X50., X75., X97.5., ess, Rhat), funs(signif(., 4)))
+# parms_summary_table = parms_summary_table %>% mutate_at(vars(mle, X2.5., X25., X50., X75., X97.5., ess, Rhat), funs(signif(., 4)))
 covid_table = parms_summary_table %>% dplyr::filter(Pathogen == "SARS-CoV-2")
-make_output_table(covid_table, "Parameters_table_covid.tex", "llccrrrrrrrrr")
+make_output_table(covid_table, "Parameters_table_covid.tex", "llccrrrrrrrrr", c(0, 0, 0, 0, 0, 3, 3, 3, 3, 3, 3, 0, 4))
 not_covid_table = parms_summary_table %>% dplyr::filter(Pathogen != "SARS-CoV-2")
-make_output_table(not_covid_table, "Parameters_table_not_covid.tex", "llccrrrrrrrrr")
+make_output_table(not_covid_table, "Parameters_table_not_covid.tex", "llccrrrrrrrrr", c(0, 0, 0, 0, 0, 3, 3, 3, 3, 3, 3, 0, 4))
 
 #parms_table = parms_summary %>%
   #dplyr::select(Pathogen, Location, Model, Parameter, mle, X2.5., X25., X50., X75., X97.5., ess, Rhat) %>%

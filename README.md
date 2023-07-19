@@ -2,7 +2,7 @@
 
 This repository contains all of the code and data required to generate the outputs in the article titled: "Replicating superspreader dynamics with compartmental models".
 
-The main analysis has been written in the [Julia](https://julialang.org) (v1.8) programming language, whilst post-processing and plotting is performed in [R](htps://www.r-project.org) (v4.2.3).
+The main analysis has been written in the [Julia](https://julialang.org) (v1.8) programming language, whilst post-processing and plotting is performed in [R](https://www.r-project.org) (v4.2.3).
 
 ## Dependencies
 The explicit dependencies for the Julia analysis can be found in `Manifest.toml`, whilst the post-processing in R uses
