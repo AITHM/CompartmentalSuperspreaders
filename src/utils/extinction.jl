@@ -4,7 +4,7 @@
     Calculate the extinction probability of an outbreak given the model parameters.
 """
 
-function extinction_prob(parms::ErlangParameters, α) 
+function extinction_prob(parms::SEIR1Parameters, α) 
     return find_zero((x) -> (1. + 3. / α * (1. - x))^(-α) - x, 1. / 3.)
 end
 
@@ -20,7 +20,7 @@ function extinction_prob(parms::ZeroInfParameters, α)
 end
 
 
-function extinction_prob(parms::MixtureParameters, α)
+function extinction_prob(parms::SEIR2Parameters, α)
     R₀₁, R₀₂ = split_R(3., parms.c, parms.ρ)
     return find_zero((x) -> (1. - parms.c) * (1. + R₀₁ / α * (1. - x))^(-α) + parms.c * (1. + R₀₂ / α * (1. - x))^(-α) - x, 1. / 3.)
 end
@@ -34,7 +34,7 @@ function extinction_prob(parms::ClinicalParameters, α, c)
 end
 
 
-function extinction_prob(parms::Variable1Parameters)
+function extinction_prob(parms::SingleTypeParameters)
     @unpack R, σ = parms
     # σ == 0. && return 1. / 3.
     σ == 1. && return find_zero((x) -> (1. + 3. / 2. * (1. - x))^(-2) - x, 1. / 3.)
@@ -42,7 +42,7 @@ function extinction_prob(parms::Variable1Parameters)
 end
 
 
-function extinction_prob(parms::Variable2Parameters)
+function extinction_prob(parms::TwoTypeParameters)
     @unpack R, σ, c, ρ = parms
     R₀₁, R₀₂ = split_R(3., c, ρ)
     σ == 1. && return find_zero((x) -> (1. - c) * (1. + R₀₁ / 2. * (1. - x))^(-2) + c * (1. + R₀₂ / 2. * (1. - x))^(-2) - x, 1. / 3.)

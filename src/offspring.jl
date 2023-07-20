@@ -53,8 +53,8 @@ function ℓ_variable(Z, n, R, σ, c, ρ)
 end
 
 
-# Erlang model
-function ℓ(prob::ErlangOffspring, R)
+# SEIR1 model
+function ℓ(prob::SEIR1Offspring, R)
     @unpack Z, n, α = prob
     return ℓ_offspring(Z, n, R, α)
 end
@@ -74,8 +74,8 @@ function ℓ(prob::ZeroInfOffspring, R, c)
 end
 
 
-# Mixture model (one subspreader type + one superspreader type)
-function ℓ(prob::MixtureOffspring, R, c, ρ)
+# SEIR2 model (one subspreader type + one superspreader type)
+function ℓ(prob::SEIR2Offspring, R, c, ρ)
     @unpack Z, n, α = prob
     return ℓ_offspring(Z, n, R, α, c, ρ)
 end
@@ -89,14 +89,14 @@ end
 
 
 # Single-type variable model
-function ℓ(prob::Variable1Offspring, R, σ)
+function ℓ(prob::SingleTypeOffspring, R, σ)
     @unpack Z, n = prob
     return ℓ_variable(Z, n, R, σ)
 end
 
 
 # Two-type variable model
-function ℓ(prob::Variable2Offspring, R, σ, c, ρ)
+function ℓ(prob::TwoTypeOffspring, R, σ, c, ρ)
     @unpack Z, n = prob
     return ℓ_variable(Z, n, R, σ, c, ρ)
 end
@@ -104,13 +104,13 @@ end
 
 #### Fitting functions ####
 # Make type callable
-function (prob::ErlangOffspring)(θ)
+function (prob::SEIR1Offspring)(θ)
     @unpack R = θ               # extract the parameters
     ℓ(prob, R) + logpdf(R_prior, R)
 end
 
 # Define transformation for parameters
-function transformation(prob::ErlangOffspring)
+function transformation(prob::SEIR1Offspring)
     as((R = asℝ₊, ))
 end
 
@@ -140,13 +140,13 @@ end
 
 
 # Make the type callable
-function (prob::MixtureOffspring)(θ)
+function (prob::SEIR2Offspring)(θ)
     R, c, ρ = θ    # extract parameters
     ℓ(prob, R, c, ρ) + logpdf(R_prior, R) + logpdf(c_prior, c) + logpdf(ρ_prior, ρ)
 end
 
 # Define transformation for parameters
-function transformation(prob::MixtureOffspring)
+function transformation(prob::SEIR2Offspring)
     as((R = asℝ₊, c = as𝕀, ρ = as𝕀))
 end
 
@@ -164,25 +164,25 @@ end
 
 
 # Make the type callable
-function (prob::Variable1Offspring)(θ)
+function (prob::SingleTypeOffspring)(θ)
     R, σ = θ    # extract parameters
     ℓ(prob, R, σ) + logpdf(R_prior, R) + logpdf(σ_prior, σ)
 end
 
 # Define transformation for parameters
-function transformation(prob::Variable1Offspring)
+function transformation(prob::SingleTypeOffspring)
     as((R = asℝ₊, σ = as𝕀))
 end
 
 
 # Make the type callable
-function (prob::Variable2Offspring)(θ)
+function (prob::TwoTypeOffspring)(θ)
     R, σ, c, ρ = θ    # extract parameters
     ℓ(prob, R, σ, c, ρ) + logpdf(R_prior, R) + logpdf(σ_prior, σ) + logpdf(c_prior, c) + logpdf(ρ_prior, ρ)
 end
 
 # Define transformation for parameters
-function transformation(prob::Variable2Offspring)
+function transformation(prob::TwoTypeOffspring)
     as((R = asℝ₊, σ = as𝕀, c = as𝕀, ρ = as𝕀))
 end
 
@@ -200,7 +200,7 @@ function fit_mcmc(prob::OffspringProblem; t=transformation(prob), iter=1_000, n_
 end
 
 
-function fit_mle(prob::ErlangOffspring)
+function fit_mle(prob::SEIR1Offspring)
     @unpack Z, n, α = prob
     opt = Opt(:LN_SBPLX, 1)
     opt.lower_bounds = [0.]
@@ -231,7 +231,7 @@ function fit_mle(prob::ZeroInfOffspring)
 end
 
 
-function fit_mle(prob::MixtureOffspring)
+function fit_mle(prob::SEIR2Offspring)
     @unpack Z, n, α = prob
     opt = Opt(:LN_SBPLX, 3)
     opt.lower_bounds = [0., 0., 0.]
@@ -253,7 +253,7 @@ function fit_mle(prob::ClinicalOffspring)
 end
 
 
-function fit_mle(prob::Variable1Offspring)
+function fit_mle(prob::SingleTypeOffspring)
     @unpack Z, n = prob
     opt = Opt(:LN_SBPLX, 2)
     opt.lower_bounds = [0., 0.]
@@ -264,7 +264,7 @@ function fit_mle(prob::Variable1Offspring)
 end
 
 
-function fit_mle(prob::Variable2Offspring)
+function fit_mle(prob::TwoTypeOffspring)
     @unpack Z, n = prob
     opt = Opt(:LN_SBPLX, 4)
     opt.lower_bounds = [0., 0., eps(), eps()]
@@ -276,11 +276,11 @@ end
 
 
 
-function fit(prob::ErlangOffspring; iter=1_000, n_chains=5, reporter=NoProgressReport())
+function fit(prob::SEIR1Offspring; iter=1_000, n_chains=5, reporter=NoProgressReport())
     ℓₘₐₓ, xₘₗₑ, ret = fit_mle(prob)
-    mle = ErlangParameters(xₘₗₑ...)
+    mle = SEIR1Parameters(xₘₗₑ...)
     posterior, ess, R̂ = fit_mcmc(prob, iter=iter, n_chains=n_chains, reporter=reporter)
-    mcmc = [ErlangParameters(posterior[i]...) for i in eachindex(posterior)]
+    mcmc = [SEIR1Parameters(posterior[i]...) for i in eachindex(posterior)]
     return Solution(mle, mcmc, ess, R̂), Scores(sum(prob.n), length(xₘₗₑ), ℓₘₐₓ)
 end
 
@@ -303,11 +303,11 @@ function fit(prob::ZeroInfOffspring; iter=1_000, n_chains=5, reporter=NoProgress
 end
 
 
-function fit(prob::MixtureOffspring; iter=1_000, n_chains=5, reporter=NoProgressReport())
+function fit(prob::SEIR2Offspring; iter=1_000, n_chains=5, reporter=NoProgressReport())
     ℓₘₐₓ, xₘₗₑ, ret = fit_mle(prob)
-    mle = MixtureParameters(xₘₗₑ...)
+    mle = SEIR2Parameters(xₘₗₑ...)
     posterior, ess, R̂ = fit_mcmc(prob, iter=iter, n_chains=n_chains, reporter=reporter)
-    mcmc = [MixtureParameters(posterior[i]...) for i in eachindex(posterior)]
+    mcmc = [SEIR2Parameters(posterior[i]...) for i in eachindex(posterior)]
     return Solution(mle, mcmc, ess, R̂), Scores(sum(prob.n), length(xₘₗₑ), ℓₘₐₓ)
 end
 
@@ -321,59 +321,55 @@ function fit(prob::ClinicalOffspring; iter=1_000, n_chains=5, reporter=NoProgres
 end
 
 
-function fit(prob::Variable1Offspring; iter=1_000, n_chains=5, reporter=NoProgressReport())
+function fit(prob::SingleTypeOffspring; iter=1_000, n_chains=5, reporter=NoProgressReport())
     ℓₘₐₓ, xₘₗₑ, ret = fit_mle(prob)
-    mle = Variable1Parameters(xₘₗₑ...)
+    mle = SingleTypeParameters(xₘₗₑ...)
     posterior, ess, R̂ = fit_mcmc(prob, iter=iter, n_chains=n_chains, reporter=reporter)
-    mcmc = [Variable1Parameters(posterior[i]...) for i in eachindex(posterior)]
+    mcmc = [SingleTypeParameters(posterior[i]...) for i in eachindex(posterior)]
     return Solution(mle, mcmc, ess, R̂), Scores(sum(prob.n), length(xₘₗₑ), ℓₘₐₓ)
 end
 
 
-function fit(prob::Variable2Offspring; iter=1_000, n_chains=5, reporter=NoProgressReport())
+function fit(prob::TwoTypeOffspring; iter=1_000, n_chains=5, reporter=NoProgressReport())
     ℓₘₐₓ, xₘₗₑ, ret = fit_mle(prob)
-    mle = Variable2Parameters(xₘₗₑ...)
+    mle = TwoTypeParameters(xₘₗₑ...)
     posterior, ess, R̂ = fit_mcmc(prob, iter=iter, n_chains=n_chains, reporter=reporter)
-    mcmc = [Variable2Parameters(posterior[i]...) for i in eachindex(posterior)]
+    mcmc = [TwoTypeParameters(posterior[i]...) for i in eachindex(posterior)]
     return Solution(mle, mcmc, ess, R̂), Scores(sum(prob.n), length(xₘₗₑ), ℓₘₐₓ)
 end
 
 
 
-function fit_offspring_ensemble(dataset, α_table, c_table; dir=".\\data\\offspring\\", iter=1_000, n_chains=5, reporter=NoProgressReport())
+function fit_ensemble(dataset, α_table, c_table; dir=".\\data\\offspring\\", models=[:NegBin, :TwoType, :Clinical], iter=1_000, n_chains=5, reporter=NoProgressReport())
     # Read in data
     data = CSV.read(dir*dataset*".csv", DataFrame)
     pathogen, location, author, _ = split(dataset, "_")
 
-    # Fit all models
-    n_sol, n_scores = fit(NegBinOffspring(data), iter=iter, n_chains=n_chains, reporter=reporter)
-    e_sol, e_scores = fit(ErlangOffspring(data, α_table[pathogen]), iter=iter, n_chains=n_chains, reporter=reporter)
-    z_sol, z_scores = fit(ZeroInfOffspring(data, α_table[pathogen]), iter=iter, n_chains=n_chains, reporter=reporter)
-    m_sol, m_scores = fit(MixtureOffspring(data, α_table[pathogen]), iter=iter, n_chains=n_chains, reporter=reporter)
-    c_sol, c_scores = fit(ClinicalOffspring(data, α_table[pathogen], c_table[pathogen]), iter=iter, n_chains=n_chains, reporter=reporter)
-    v1_sol, v1_scores = fit(Variable1Offspring(data), iter=iter, n_chains=n_chains, reporter=reporter)
-    v2_sol, v2_scores = fit(Variable2Offspring(data), iter=iter, n_chains=n_chains, reporter=reporter)
+    # Datatypes
+    Offspring = Dict(:NegBin => NegBinOffspring, :TwoType => TwoTypeOffspring, 
+                     :Clinical => ClinicalOffspring, :SEIR2 => SEIR2Offspring, :ZeroInf => ZeroInfOffspring, 
+                     :SingleType => SingleTypeOffspring, :SEIR1 => SEIR1Offspring)
+
+    # Fit models
+    all_sol = Vector{Solution}()
+    all_scores = Vector{Scores}()
+    for model in models
+        sol, scores = fit(Offspring[model](data, α_table[pathogen], c_table[pathogen]), iter=iter, n_chains=n_chains, reporter=reporter)
+        push!(all_sol, sol)
+        push!(all_scores, scores)
+    end
 
     # Concatenate model results
-    all_sol = [n_sol, e_sol, z_sol, m_sol, c_sol, v1_sol, v2_sol]
     parms_summ = vcat(combine_sol.(all_sol)...)
     parms_summ = hcat(DataFrame(Dataset = fill(dataset, nrow(parms_summ))), parms_summ)
 
-    chain = vcat(DataFrame(n_sol.mcmc, complete=true),
-                 DataFrame(e_sol.mcmc, complete=true, α=α_table[pathogen]),
-                 DataFrame(z_sol.mcmc, complete=true, α=α_table[pathogen]),
-                 DataFrame(m_sol.mcmc, complete=true, α=α_table[pathogen]),
-                 DataFrame(c_sol.mcmc, complete=true, α=α_table[pathogen], c=c_table[pathogen]),
-                 DataFrame(v1_sol.mcmc, complete=true),
-                 DataFrame(v2_sol.mcmc, complete=true))
-
+    chain = vcat([DataFrame(sol.mcmc, complete=true,  α=α_table[pathogen], c=c_table[pathogen]) for sol in all_sol]...)
     chain = hcat(DataFrame(Dataset = fill(dataset, nrow(chain))), chain)
 
     # Calculate weights for each model
-    all_scores = [n_scores, e_scores, z_scores, m_scores, c_scores, v1_scores, v2_scores]
     weights = get_weights(all_scores)
-    score_summ = DataFrame(hcat(fill(dataset, 7),
-                                [:NegBin, :Erlang, :ZeroInf, :Mixture, :Clinical, :SingleType, :TwoType],
+    score_summ = DataFrame(hcat(fill(dataset, length(models)),
+                                models,
                                 map(f -> getfield.(all_scores, f), fieldnames(Scores))..., 
                                 weights), 
                            vcat([:Dataset, :Model], fieldnames(Scores)..., [:w]))
@@ -382,14 +378,36 @@ function fit_offspring_ensemble(dataset, α_table, c_table; dir=".\\data\\offspr
     n_tot = sum(data.n)
     Z_max = 150
     Z_array = collect(0:Z_max)
-    model_fit = vcat(DataFrame(Model = fill(:NegBin, Z_max+1), Z = Z_array, n = exp.(ℓ_offspring.(Z_array, 1, n_sol.mle.R, n_sol.mle.α)) .* n_tot),
-                     DataFrame(Model = fill(:Erlang, Z_max+1), Z = Z_array, n = exp.(ℓ_offspring.(Z_array, 1, e_sol.mle.R, α_table[pathogen])) .* n_tot),
-                     DataFrame(Model = fill(:ZeroInf, Z_max+1), Z = Z_array, n = exp.(ℓ_offspring.(Z_array, 1, z_sol.mle.R, α_table[pathogen], z_sol.mle.c, 0.)) .* n_tot),
-                     DataFrame(Model = fill(:Mixture, Z_max+1), Z = Z_array, n = exp.(ℓ_offspring.(Z_array, 1, m_sol.mle.R, α_table[pathogen], m_sol.mle.c, m_sol.mle.ρ)) .* n_tot),
-                     DataFrame(Model = fill(:Clinical, Z_max+1), Z = Z_array, n = exp.(ℓ_offspring.(Z_array, 1, c_sol.mle.R, α_table[pathogen], c_table[pathogen], c_sol.mle.ρ)) .* n_tot),
-                     DataFrame(Model = fill(:SingleType, Z_max+1), Z = Z_array, n = exp.(ℓ_variable.(Z_array, 1, v1_sol.mle.R, v1_sol.mle.σ)) .* n_tot),
-                     DataFrame(Model = fill(:TwoType, Z_max+1), Z = Z_array, n = exp.(ℓ_variable.(Z_array, 1, v2_sol.mle.R, v2_sol.mle.σ, v2_sol.mle.c, v2_sol.mle.ρ)) .* n_tot))
+    
+    model_fit = vcat([DataFrame(Model = fill(models[idx], Z_max+1), Z=Z_array, n=predict(Z_array, n_tot, all_sol[idx].mle, α_table[pathogen], c_table[pathogen])) for idx in eachindex(models)]...)
     model_fit = hcat(DataFrame(Dataset = fill(dataset, nrow(model_fit))), model_fit)                 
-
     return parms_summ, score_summ, chain, model_fit
+end
+
+function predict(Z::Vector{Int64}, n::Int64, parms::NegBinParameters, α, c)
+    return exp.(ℓ_offspring.(Z, 1, parms.R, parms.α)) .* n
+end
+
+function predict(Z::Vector{Int64}, n::Int64, parms::SEIR1Parameters, α, c)
+    return exp.(ℓ_offspring.(Z, 1, parms.R, α)) .* n
+end
+
+function predict(Z::Vector{Int64}, n::Int64, parms::ZeroInfParameters, α, c)
+    return exp.(ℓ_offspring.(Z, 1, parms.R, α, parms.c, 0.)) .* n
+end
+
+function predict(Z::Vector{Int64}, n::Int64, parms::SEIR2Parameters, α, c)
+    return exp.(ℓ_offspring.(Z, 1, parms.R, α, parms.c, parms.ρ)) .* n
+end
+
+function predict(Z::Vector{Int64}, n::Int64, parms::ClinicalParameters, α, c)
+    return exp.(ℓ_offspring.(Z, 1, parms.R, α, c, parms.ρ)) .* n
+end
+
+function predict(Z::Vector{Int64}, n::Int64, parms::SingleTypeParameters, α, c)
+    return exp.(ℓ_variable.(Z, 1, parms.R, parms.σ)) .* n
+end
+
+function predict(Z::Vector{Int64}, n::Int64, parms::TwoTypeParameters, α, c)
+    return exp.(ℓ_variable.(Z, 1, parms.R, parms.σ, parms.c, parms.ρ)) .* n
 end

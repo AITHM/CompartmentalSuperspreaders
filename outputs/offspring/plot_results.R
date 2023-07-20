@@ -4,109 +4,33 @@ source("outputs/plot_utils.R")
 
 ### Data imports ###
 data_dir = "data/offspring/"
-output_dir = "outputs/offspring/baseline/"   # Edit the final directory to obtain sensitivity results (e.g., baseline -> k5)
+output_dir = "outputs/offspring/baseline/"   # Edit the final directory to obtain sensitivity results (e.g., baseline -> k3)
+
 
 # Offspring data
-offspring_files = list.files(path=data_dir, pattern ="*.csv")
-offspring_datasets = lapply(paste0(data_dir, offspring_files), read.csv)
-names(offspring_datasets) = gsub('.{4}$', '', offspring_files)
-offspring = bind_rows(offspring_datasets, .id="Dataset")
-offspring = cbind(str_split(offspring$Dataset, "_", n=3, simplify=TRUE), offspring)
-names(offspring) = c("Pathogen", "Location", "Author", "Dataset", "Z", "n")
-offspring$Pathogen = factor(offspring$Pathogen, levels=pathogen_levels)
-offspring$Label = relabel_offspring(offspring$Dataset)
+offspring = read_input(data_dir)
 
 # Model predictions
-model_fits = read.csv(paste0(output_dir, "model_fit.csv"))
-model_fits = cbind(str_split(model_fits$Dataset, "_", n=3, simplify=TRUE), model_fits)
-names(model_fits) = c("Pathogen", "Location", "Author", "Dataset", "Model", "Z", "n")
-model_fits$Pathogen = factor(model_fits$Pathogen, levels=pathogen_levels)
-model_fits$Model = relabel_model(model_fits$Model)
-model_fits$Label = relabel_offspring(model_fits$Dataset)
+model_fits = read_output("model_fit")
+
 
 # Model performance
-score_summary = read.csv(paste0(output_dir, "score_summary.csv"), stringsAsFactors = TRUE)
-score_summary = cbind(str_split(score_summary$Dataset, "_", n=3, simplify=TRUE), score_summary)
-names(score_summary)[1:3] = c("Pathogen", "Location", "Author")
-score_summary$Label = relabel_offspring(score_summary$Dataset)
-score_summary$Model = relabel_model(score_summary$Model)
-score_summary$Pathogen = factor(score_summary$Pathogen, levels=pathogen_levels)
+score_summary = read_output("score_summary")
+
 
 # Model parameters
-parms_summary = read.csv(paste0(output_dir, "parm_summary.csv"), stringsAsFactors = TRUE)
-parms_summary = cbind(str_split(parms_summary$Dataset, "_", n=3, simplify=TRUE), parms_summary)
-names(parms_summary)[1:3] = c("Pathogen", "Location", "Author")
-parms_summary$Label = relabel_offspring(parms_summary$Dataset)
-parms_summary$Model = relabel_model(parms_summary$Model)
-parms_summary$Pathogen = factor(parms_summary$Pathogen, levels=pathogen_levels)
+parms_summary = read_output("parm_summary")
 
 # Parameter chains
-full_chain = read.csv(paste0(output_dir, "full_chain.csv"))
-full_chain = cbind(str_split(full_chain$Dataset, "_", n=3, simplify=TRUE), full_chain)
-names(full_chain)[1:3] = c("Pathogen", "Location", "Author")
-full_chain$Label = relabel_offspring(full_chain$Dataset)
-full_chain$Model = relabel_model(full_chain$Model)
-full_chain$Pathogen = factor(full_chain$Pathogen, levels=pathogen_levels)
-
-
-### Mutate data ###
-# Aggregate ≥15 offspring
-Z_range = c(0,15)
-Zalt_labels = c(seq(0,14), "≥15")
-Zalt_ticks = rep("", length(Zalt_labels))
-Zalt_ticks[seq(1, length(Zalt_labels), by=5)] = Zalt_labels[seq(1, length(Zalt_labels), by=5)]
-offspring$Zalt = factor(cut(offspring$Z, breaks = c(seq(Z_range[1] - 0.5, Z_range[2] - 0.5, by=1), Inf), labels=Zalt_labels), levels=Zalt_labels)
-model_fits$Zalt = factor(cut(model_fits$Z, breaks = c(seq(Z_range[1] - 0.5, Z_range[2] - 0.5, by=1), Inf), labels=Zalt_labels), levels=Zalt_labels)
-summarize_df = expand.grid(Label = offspring_labels, Zalt = Zalt_labels)
-
-offspring_accum = summarize_df %>%
-  left_join(offspring, by = c("Label", "Zalt")) %>%
-  group_by(Label, Zalt, Pathogen) %>%
-  summarize(count = sum(n), .groups = "drop") %>%
-  replace_na(list(count = 0))
-
-model_accum = summarize_df %>%
-  left_join(model_fits, by = c("Label", "Zalt")) %>%
-  group_by(Model, Label, Zalt, Pathogen) %>%
-  summarize(count = sum(n), .groups = "drop") %>%
-  replace_na(list(count = 0)) %>%
-  filter(Model %in% c("Negative Binomial", "Two-type", "Clinical"))
-
-max.offspring = offspring %>%
-  group_by(Dataset) %>%
-  summarize(Max.n = max(n))
-
-score_text = score_summary %>%
-  arrange(Dataset, Model) %>%
-  filter(Model %in% c("Negative Binomial", "Two-type", "Clinical")) %>%
-  mutate(n = as.vector(sapply(max.offspring$Max.n, function(x) x * c(0.9, 0.7, 0.5))),
-         wr = paste0("w = ", round(w, 2)),
-         aiccs = paste0("AICc = ", signif(AICc, 4)))
-
-score_text$Zalt = 10.5
+full_chain = read_output("full_chain")
 
 
 
 #### Model fits ####
 
-ggplot(model_accum, aes(x=Zalt)) +
-  geom_bar(data=offspring_accum, aes(weight=count, fill=Pathogen), alpha=1.) + 
-  geom_point(aes(y = count, col=Model, shape=Model), size=3, alpha=0.7) +
-  geom_line(aes(y = count, group=Model, col=Model, lty=Model), lwd=1, alpha=0.7) +
-  geom_text(data=score_text, aes(y=n, label=aiccs, col=Model), size=6, family="serif") +
-  facet_wrap(Label ~ ., scales="free") +
-  xlab("Secondary cases (Z)") +
-  ylab("Frequency") +
-  scale_x_discrete(labels = Zalt_ticks) +
-  scale_y_continuous(label=scales::comma) +
-  custom_theme + 
-  scale_fill_pathogen() +
-  scale_col_model() + 
-  scale_shape_model() +
+plot_fit(offspring, model_fits, score_summary, models=c("Negative Binomial", "Two-type", "Clinical"))  +
   guides(fill = guide_legend(nrow=4),
          col = guide_legend(nrow=3))
-
-
 ggsave(paste0(output_dir, "offspring_fits.png"), dpi=600, width=14, height=14)
 
 
@@ -115,18 +39,9 @@ ggsave(paste0(output_dir, "offspring_fits.png"), dpi=600, width=14, height=14)
 #### Parameter plots ####
 
 ## Plot R for each model * dataset ##
-parms_summary %>%
-  filter(Parameter=="R", Model %in% c("Negative Binomial", "Two-type", "Clinical")) %>%
-  ggplot(aes(x = Label, col=Pathogen, shape=Model)) +
-  geom_linerange(aes(ymin = X2.5., ymax=X97.5.),position=position_dodge2(width=0.75), lwd=2, alpha=0.3) +
-  geom_linerange(aes(ymin = X25., ymax=X75.), position=position_dodge2(width=0.75), lwd=2, alpha=0.6) +
-  geom_point(aes(y=X50.), position=position_dodge2(width=0.75), size=3) +
-  geom_hline(yintercept = 1, lty=2, lwd=1) +
-  xlab("") +
-  ylab("Reproductive number (R)") +
-  custom_theme + theme(axis.text.x = element_text(angle = 60, hjust=1), legend.position = c(0.2,0.65)) +
-  scale_col_pathogen() +
-  scale_shape_model() +
+
+plot_parameter(parms_summary, "R", ylabel="Reproductive number (R)", models=c("Negative Binomial", "Two-type", "Clinical")) +
+    geom_hline(yintercept = 1, lty=2, lwd=1) +
   guides(col = guide_legend(nrow=4))
 
 
@@ -134,26 +49,11 @@ ggsave(paste0(output_dir, "R_estimates.png"), dpi=600, width=12, height=7.5)
 
 
 ### Dispersion parameter ###
-parms_summary %>%
-  filter(Parameter=="α") %>%
-  ggplot(aes(x = Label, col=Pathogen, shape=Model)) +
-  geom_linerange(aes(ymin = X2.5., ymax=X97.5.),position=position_dodge2(width=0.75), lwd=2, alpha=0.3) +
-  geom_linerange(aes(ymin = X25., ymax=X75.), position=position_dodge2(width=0.75), lwd=2, alpha=0.6) +
-  geom_point(aes(y=X50.), position=position_dodge2(width=0.75), size=3) +
-  xlab("") +
-  ylab(expression(Dispersion~(k[NB]))) +
-  # ylab(Tex("Dispersion parameter, $k_{NB}$")) +
-  custom_theme + theme(axis.text.x = element_text(angle = 60, hjust=1)) +
+
+plot_parameter(parms_summary, "α", ylabel=expression(Dispersion~(k[NB])), models=c("Negative Binomial")) +
   scale_y_continuous(trans="log10", breaks = c(0.01, 0.05, 0.1, 0.5, 1., 5.)) +
-  # scale_y_log10(
-  #   # breaks = c(0.01, 0.03, 0.1, 0.3, 1., 3.),
-  #   breaks = scales::trans_breaks("log10", function(x) 10^x),
-  #   labels = scales::trans_format("log10", scales::math_format(10^.x))
-  # ) +
-  # coord_trans(y = "log10") +
   annotation_logticks(sides="l") +
-  scale_col_pathogen() +
-  scale_shape_model()
+  theme(legend.position="bottom")
 
 
 ggsave(paste0(output_dir, "k_negbin.png"), dpi=600, width=12, height=7.5)
@@ -161,20 +61,8 @@ ggsave(paste0(output_dir, "k_negbin.png"), dpi=600, width=12, height=7.5)
 
 
 ### Superspreader fraction + relative transmissibility ###
-parms_summary %>%
-  filter(Parameter %in% c("c", "ρ"), Model %in% c("Two-type")) %>%
-  ggplot(aes(x = Label, col=Pathogen)) +
-  geom_linerange(aes(ymin = X2.5., ymax=X97.5.),position=position_dodge2(width=0.5), lwd=2, alpha=0.3) +
-  geom_linerange(aes(ymin = X25., ymax=X75.), position=position_dodge2(width=0.5), lwd=2, alpha=0.6) +
-  geom_point(aes(y=X50.), position=position_dodge2(width=0.5), size=3) +
-  # facet_grid(Parameter ~ .) +
-  xlab("") +
-  ylab("") +
-  ylab("Superspreader fraction (c)\nRelative transmissibility (ρ)") +
-  custom_theme + theme(axis.text.x = element_text(angle = 60, hjust=1), legend.position = "bottom") +
-  # scale_y_continuous(trans="log10") +
-  scale_y_continuous(labels=scales::percent) +
-  scale_col_pathogen() +
+
+plot_parameter(parms_summary, c("c", "ρ"), ylabel="Superspreader fraction (c)\nRelative transmissibility (ρ)", models=c("Two-type")) +
   guides(col = guide_legend(nrow=4))
 
 
@@ -182,19 +70,8 @@ ggsave(paste0(output_dir, "c_rho.png"), dpi=600, width=12, height=7.5)
 
 
 
-
-parms_summary %>%
-  filter(Parameter %in% c("σ"), Model %in% c("Two-type")) %>%
-  ggplot(aes(x = Label, col=Pathogen)) +
-  geom_linerange(aes(ymin = X2.5., ymax=X97.5.),position=position_dodge2(width=0.5), lwd=2, alpha=0.3) +
-  geom_linerange(aes(ymin = X25., ymax=X75.), position=position_dodge2(width=0.5), lwd=2, alpha=0.6) +
-  geom_point(aes(y=X50.), position=position_dodge2(width=0.5), size=3) +
-  xlab("") +
-  ylab("") +
-  ylab("Relative transmissibility (σ)") +
-  custom_theme + theme(axis.text.x = element_text(angle = 60, hjust=1), legend.position = "right") +
-  scale_y_continuous(labels=scales::percent) +
-  scale_col_pathogen()
+plot_parameter(parms_summary, "σ", ylabel="Relative transmissibility (σ)", models=c("Two-type")) +
+  theme(legend.position = "right")
 
 
 ggsave(paste0(output_dir, "sigma.png"), dpi=600, width=12, height=7.5)
@@ -203,26 +80,8 @@ ggsave(paste0(output_dir, "sigma.png"), dpi=600, width=12, height=7.5)
 
 #### Derived parameters ####
 ### Extinction probability
-full_chain %>%
-  filter(Model %in% c("Negative Binomial", "Two-type", "Clinical")) %>%
-  group_by(Label, Pathogen, Model) %>%
-  summarize(lower025 = quantile(q, 0.025),
-            lower25 = quantile(q, 0.25),
-            median = median(q),
-            upper75 = quantile(q, 0.75),
-            upper975 = quantile(q, 0.975)) %>%
-  ggplot(aes(x = Label, col=Pathogen, shape=Model)) +
-  geom_point(aes(y=median), position=position_dodge2(width=0.75), size=3) +
-  geom_linerange(aes(ymin = lower025, ymax=upper975), position=position_dodge2(width=0.75), lwd=2, alpha=0.3) +
-  geom_linerange(aes(ymin = lower25, ymax=upper975), position=position_dodge2(width=0.75), lwd=2, alpha=0.6) +
-  geom_hline(yintercept=0.20923955891032855, lty=2) +
-  annotate("text", x=5, y=0.17, size=6, label="Homogeneous limit", family="serif") +
-  xlab("") +
-  ylab("Extinction probability (q)") +
-  scale_y_continuous(labels=scales::percent, limits = c(0,1), breaks = seq(0,1,0.1)) +
-  custom_theme + theme(axis.text.x = element_text(angle = 60, hjust=1), legend.position = "right") +
-  scale_col_pathogen() +
-  scale_shape_model()
+
+plot_extinction(full_chain, models=c("Negative Binomial", "Two-type", "Clinical"))
 
 
 ggsave(paste0(output_dir, "q_estimates.png"), dpi=600, width=12, height=7.5)
@@ -232,14 +91,8 @@ ggsave(paste0(output_dir, "q_estimates.png"), dpi=600, width=12, height=7.5)
 
 #### Scores ####
 ## Plot score by model for each dataset ##
-ggplot(score_summary, aes(x=Model, col=Pathogen, shape=Model)) +
-  geom_point(aes(y=w), size=4) +
-  facet_wrap(Label ~ ., nrow=5) +
-  xlab("Model") +
-  ylab("Akaike weight (w)") +
-  custom_theme + theme(axis.text.x = element_text(angle = 60, hjust=1), legend.position="right") +
-  scale_shape_model() +
-  scale_col_pathogen()
+
+plot_score(score_summary, models=c("Negative Binomial", "Two-type", "Clinical", "Single-type"))
 
 
 ggsave(paste0(output_dir, "all_scores.png"), dpi=600, height=12, width=16)
@@ -247,7 +100,25 @@ ggsave(paste0(output_dir, "all_scores.png"), dpi=600, height=12, width=16)
 
 
 
+####### Clinical results #######
+clinical_offspring = read_input(dir = "./data/offspring/clinical/")
+clinical_offspring$Label = relabel_clinical(clinical_offspring$Dataset)
 
+
+# Model predictions
+clinical_fits = read_output("model_fit", output_dir = "./outputs/offspring/clinical/")
+clinical_fits$Label = relabel_clinical(clinical_fits$Dataset)
+
+# Model performance
+clinical_scores = read_output("score_summary", output_dir = "./outputs/offspring/clinical/")
+clinical_scores$Label = relabel_clinical(clinical_scores$Dataset)
+
+
+
+plot_fit(clinical_offspring, clinical_fits, clinical_scores, models=c("Negative Binomial", "Single-type"), Z_max=8, Z_inc=2, labels=clinical_labels, x_text=6) + 
+  theme(legend.position="right")
+
+ggsave("./outputs/offspring/clinical/clinical_model_fit_comparison.png", dpi=600, height=6, width=9)
 
 
 ##### Supplementary figures ####
@@ -283,65 +154,23 @@ make_output_table(not_covid_table, "Parameters_table_not_covid.tex", "llccrrrrrr
 
 #### Posterior plots ###
 ## Plot  R v. α
-full_chain %>%
-  filter(Model == "Negative Binomial") %>%
-  ggplot(aes(x= R, y= α, col=Pathogen)) +
-  geom_point(alpha=0.5) +
-  # geom_density_2d(bins=4) +
-  geom_vline(xintercept=1, lty=2) +
-  facet_wrap(Label ~ ., nrow=5) +
+
+plot_pairs(full_chain, "R", "α", model="Negative Binomial", xlabel="Reproduction number", ylabel="Dispersion parameter (k)") +
   scale_x_continuous(limits=c(0, 8), expand=c(0,0)) +
   scale_y_continuous(trans="log10", limits = c(0.01, 12.)) +
-  ylab("Dispersion parameter (k)") +
-  xlab("Reproduction number") +
-  custom_theme + scale_col_pathogen()
+  geom_vline(xintercept=1, lty=2)
+
 
 ggsave(paste0(output_dir, "R_v_k_posterior.png"), dpi=600, height=10, width=16)
 
 
 ## Plot R v. c
-full_chain %>%
-  filter(Model == "Mixture") %>%
-  ggplot(aes(x= R, y= c, col=Pathogen)) +
-  geom_point(alpha=0.5) +
-  # geom_density_2d(bins=4) +
-  geom_vline(xintercept=1, lty=2) +
-  facet_wrap(Label ~ ., nrow=5) +
-  scale_x_continuous(limits=c(0, 8), expand=c(0,0)) +
-  ylab("Superspreader fraction (c)") +
-  xlab("Reproduction number") +
-  custom_theme + scale_col_pathogen()
+
+plot_pairs(full_chain, "R", "c", model="Two-type", xlabel="Reproduction number, R", ylabel="Superspreader fraction, c") +
+  geom_vline(xintercept=1, lty=2)
+
 
 ggsave(paste0(output_dir, "R_v_c_posterior.png"), dpi=600, height=10, width=16)
 
 
-## Plot R v. ρ
-full_chain %>%
-  filter(Model == "Mixture") %>%
-  ggplot(aes(x= R, y=ρ, col=Pathogen)) +
-  geom_point(alpha=0.5) +
-  # geom_density_2d(bins=4) +
-  geom_vline(xintercept=1, lty=2) +
-  facet_wrap(Label ~ ., nrow=5) +
-  scale_x_continuous(limits=c(0, 8), expand=c(0,0)) +
-  ylab("Relative transmissibility (ρ)") +
-  xlab("Reproduction number") +
-  custom_theme + scale_col_pathogen()
 
-ggsave(paste0(output_dir, "R_v_rho_posterior.png"), dpi=600, height=10, width=16)
-
-
-
-## Plot c v. ρ
-full_chain %>%
-  filter(Model == "Mixture") %>%
-  ggplot(aes(x= c, y= ρ, col=Pathogen)) +
-  geom_point(alpha=0.5) +
-  # geom_density_2d(bins=4) +
-  geom_vline(xintercept=1, lty=2) +
-  facet_wrap(Label ~ ., nrow=5) +
-  ylab("Relative transmissibility (ρ)") +
-  xlab("Superspreader fraction (c)") +
-  custom_theme + scale_col_pathogen()
-
-ggsave(paste0(output_dir, "c_v_rho_posterior.png"), dpi=600, height=10, width=16)

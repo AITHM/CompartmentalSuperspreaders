@@ -33,7 +33,7 @@ end
 #### Parameters ####
 abstract type Parameters end
 
-struct ErlangParameters <: Parameters
+struct SEIR1Parameters <: Parameters
     R::Float64
 end
 
@@ -50,7 +50,7 @@ struct ZeroInfParameters <: Parameters
 end
 
 
-struct MixtureParameters <: Parameters
+struct SEIR2Parameters <: Parameters
     R::Float64
     c::Float64
     ρ::Float64
@@ -64,13 +64,13 @@ struct ClinicalParameters <: Parameters
 end
 
 
-struct Variable1Parameters <: Parameters
+struct SingleTypeParameters <: Parameters
     R::Float64
     σ::Float64
 end
 
 
-struct Variable2Parameters <: Parameters
+struct TwoTypeParameters <: Parameters
     R::Float64
     σ::Float64
     c::Float64
@@ -130,9 +130,9 @@ end
 import DataFrames.DataFrame
 
 
-function DataFrame(chain::Vector{ErlangParameters}; complete=true, α=1)
+function DataFrame(chain::Vector{SEIR1Parameters}; complete=true, α=1, c=1.)
     n = length(chain)
-    df = DataFrame(hcat(fill("Erlang", n), hcat(extract_values.(chain)...)'), vcat(:Model, [fname for fname in fieldnames(ErlangParameters)]))
+    df = DataFrame(hcat(fill("SEIR1", n), hcat(extract_values.(chain)...)'), vcat(:Model, [fname for fname in fieldnames(SEIR1Parameters)]))
     df[!, :q] = extinction_prob.(chain, α)
     if complete
         df[!, :α] = fill(-1., n)
@@ -144,7 +144,7 @@ function DataFrame(chain::Vector{ErlangParameters}; complete=true, α=1)
 end
 
 
-function DataFrame(chain::Vector{NegBinParameters}; complete=true, α=1)
+function DataFrame(chain::Vector{NegBinParameters}; complete=true, α=1, c=1.)
     n = length(chain)
     df = DataFrame(hcat(fill("NegBin", n), hcat(extract_values.(chain)...)'), vcat(:Model, [fname for fname in fieldnames(NegBinParameters)]))
     df[!, :q] = extinction_prob.(chain, df.α)
@@ -157,7 +157,7 @@ function DataFrame(chain::Vector{NegBinParameters}; complete=true, α=1)
 end
 
 
-function DataFrame(chain::Vector{ZeroInfParameters}; complete=true, α=1)
+function DataFrame(chain::Vector{ZeroInfParameters}; complete=true, α=1, c=1.)
     n = length(chain)
     df = DataFrame(hcat(fill("ZeroInf", n), hcat(extract_values.(chain)...)'), vcat(:Model, [fname for fname in fieldnames(ZeroInfParameters)]))
     df[!, :q] = extinction_prob.(chain, α)
@@ -170,9 +170,9 @@ function DataFrame(chain::Vector{ZeroInfParameters}; complete=true, α=1)
 end
 
 
-function DataFrame(chain::Vector{MixtureParameters}; complete=true, α=1)
+function DataFrame(chain::Vector{SEIR2Parameters}; complete=true, α=1, c=1.)
     n = length(chain)
-    df = DataFrame(hcat(fill("Mixture", n), hcat(extract_values.(chain)...)'), vcat(:Model, [fname for fname in fieldnames(MixtureParameters)]))
+    df = DataFrame(hcat(fill("SEIR2", n), hcat(extract_values.(chain)...)'), vcat(:Model, [fname for fname in fieldnames(SEIR2Parameters)]))
     df[!, :q] = extinction_prob.(chain, α)
     if complete
         df[!, :α] = fill(-1., n)
@@ -195,9 +195,9 @@ function DataFrame(chain::Vector{ClinicalParameters}; complete=true, α=1, c=1.)
 end
 
 
-function DataFrame(chain::Vector{Variable1Parameters}; complete=true, α=1, c=1.)
+function DataFrame(chain::Vector{SingleTypeParameters}; complete=true, α=1, c=1.)
     n = length(chain)
-    df = DataFrame(hcat(fill("Variable1", n), hcat(extract_values.(chain)...)'), vcat(:Model, [fname for fname in fieldnames(Variable1Parameters)]))
+    df = DataFrame(hcat(fill("SingleType", n), hcat(extract_values.(chain)...)'), vcat(:Model, [fname for fname in fieldnames(SingleTypeParameters)]))
     df[!, :q] = extinction_prob.(chain)
     if complete
         df[!, :α] = fill(-1., n)
@@ -208,9 +208,9 @@ function DataFrame(chain::Vector{Variable1Parameters}; complete=true, α=1, c=1.
 end
 
 
-function DataFrame(chain::Vector{Variable2Parameters}; complete=true, α=1, c=1.)
+function DataFrame(chain::Vector{TwoTypeParameters}; complete=true, α=1, c=1.)
     n = length(chain)
-    df = DataFrame(hcat(fill("Variable2", n), hcat(extract_values.(chain)...)'), vcat(:Model, [fname for fname in fieldnames(Variable2Parameters)]))
+    df = DataFrame(hcat(fill("TwoType", n), hcat(extract_values.(chain)...)'), vcat(:Model, [fname for fname in fieldnames(TwoTypeParameters)]))
     df[!, :q] = extinction_prob.(chain)
     if complete
         df[!, :α] = fill(-1., n)
@@ -227,14 +227,15 @@ abstract type Problem end
 ### Offspring ###
 abstract type OffspringProblem <: Problem end
 
-## Erlang model
-struct ErlangOffspring <: OffspringProblem
+## SEIR1 model
+struct SEIR1Offspring <: OffspringProblem
     Z::Vector{Int64}
     n::Vector{Int64}
-    α::Int64             # erlang shape parameter
+    α::Int64             # SEIR1 shape parameter
 end
 
-ErlangOffspring(df::DataFrame, α) = ErlangOffspring(df.Z, df.n, α)
+SEIR1Offspring(df::DataFrame, α) = SEIR1Offspring(df.Z, df.n, α)
+SEIR1Offspring(df::DataFrame, α, c) = SEIR1Offspring(df.Z, df.n, α)
 
 ## Negative binomial model
 struct NegBinOffspring <: OffspringProblem
@@ -243,50 +244,54 @@ struct NegBinOffspring <: OffspringProblem
 end
 
 NegBinOffspring(df::DataFrame) = NegBinOffspring(df.Z, df.n)
+NegBinOffspring(df::DataFrame, α, c) = NegBinOffspring(df.Z, df.n)
 
 ## Zero-inflated model
 struct ZeroInfOffspring <: OffspringProblem
     Z::Vector{Int64}     # offspring
     n::Vector{Int64}     # frequency of Z
-    α::Int64             # erlang shape parameter
+    α::Int64             # SEIR1 shape parameter
 end
 
 ZeroInfOffspring(df::DataFrame, α) = ZeroInfOffspring(df.Z, df.n, α)
+ZeroInfOffspring(df::DataFrame, α, c) = ZeroInfOffspring(df.Z, df.n, α)
 
-## Mixture model
-struct MixtureOffspring <: OffspringProblem
+## SEIR2 model
+struct SEIR2Offspring <: OffspringProblem
     Z::Vector{Int64}     # offspring
     n::Vector{Int64}     # frequency of Z
-    α::Int64             # erlang shape parameter
+    α::Int64             # SEIR1 shape parameter
 end
 
-MixtureOffspring(df::DataFrame, α) = MixtureOffspring(df.Z, df.n, α)
-
+SEIR2Offspring(df::DataFrame, α) = SEIR2Offspring(df.Z, df.n, α)
+SEIR2Offspring(df::DataFrame, α, c) = SEIR2Offspring(df.Z, df.n, α)
 
 ## Clinical model
 struct ClinicalOffspring <: OffspringProblem
     Z::Vector{Int64}     # offspring
     n::Vector{Int64}     # frequency of Z
-    α::Int64             # erlang shape parameter
+    α::Int64             # SEIR1 shape parameter
     c::Float64           # clinical fraction
 end
 
 ClinicalOffspring(df::DataFrame, α, c) = ClinicalOffspring(df.Z, df.n, α, c)
 
 
-## Variable1 model
-struct Variable1Offspring <: OffspringProblem
+## SingleType model
+struct SingleTypeOffspring <: OffspringProblem
     Z::Vector{Int64}     # offspring
     n::Vector{Int64}     # frequency of Z
 end
 
-Variable1Offspring(df::DataFrame) = Variable1Offspring(df.Z, df.n)
+SingleTypeOffspring(df::DataFrame) = SingleTypeOffspring(df.Z, df.n)
+SingleTypeOffspring(df::DataFrame, α, c) = SingleTypeOffspring(df.Z, df.n)
 
 
-## Variable2 model
-struct Variable2Offspring <: OffspringProblem
+## TwoType model
+struct TwoTypeOffspring <: OffspringProblem
     Z::Vector{Int64}     # offspring
     n::Vector{Int64}     # frequency of Z
 end
 
-Variable2Offspring(df::DataFrame) = Variable2Offspring(df.Z, df.n)
+TwoTypeOffspring(df::DataFrame) = TwoTypeOffspring(df.Z, df.n)
+TwoTypeOffspring(df::DataFrame, α, c) = TwoTypeOffspring(df.Z, df.n)
