@@ -78,6 +78,16 @@ struct TwoTypeParameters <: Parameters
 end
 
 
+struct ThreeTypeParameters <: Parameters
+    R::Float64
+    σ::Float64
+    c₁::Float64
+    c₂::Float64
+    ρ₁::Float64
+    ρ₂::Float64
+end
+
+
 function extract_values(parms::T) where T <: Parameters
     return [getfield(parms, fname) for fname in fieldnames(T)]
 end 
@@ -295,3 +305,13 @@ end
 
 TwoTypeOffspring(df::DataFrame) = TwoTypeOffspring(df.Z, df.n)
 TwoTypeOffspring(df::DataFrame, α, c) = TwoTypeOffspring(df.Z, df.n)
+
+
+## ThreeType model
+struct ThreeTypeOffspring <: OffspringProblem
+    Z::Vector{Int64}    # offspring
+    n::Vector{Int64}    # frequency of Z
+end
+
+ThreeTypeOffspring(df::DataFrame) = ThreeTypeOffspring(df.Z, df.n)
+ThreeTypeOffspring(df::DataFrame, α, c) = ThreeTypeOffspring(df.Z, df.n)

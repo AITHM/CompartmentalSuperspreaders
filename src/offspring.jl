@@ -41,13 +41,27 @@ function ℓ_variable(Z, n, R, σ)
 end
 
 
-# Multi-type variable
+# Two-type variable
 function ℓ_variable(Z, n, R, σ, c, ρ)
     σ == 1. && return ℓ_offspring(Z, n, R, 2, c, ρ)
     R₁, R₂ = split_R(R, c, ρ)
     loglik = sum(n) * ( log(1. + σ) - log(1. - σ) )
     for i in eachindex(Z)
         loglik += n[i] * log( (1. - c) * 1. / R₁ * ( (R₁ / (1 + σ + R₁))^(Z[i] + 1) - (σ * R₁ / (1. + σ + σ * R₁))^(Z[i] + 1) ) + c * 1. / R₂ * ( (R₂ / (1 + σ + R₂))^(Z[i] + 1) - (σ * R₂ / (1. + σ + σ * R₂))^(Z[i] + 1) ) )
+    end
+    return loglik
+end
+
+
+# Three-type variable
+function ℓ_variable(Z, n, R, σ, c₁, c₂, ρ₁, ρ₂)
+    # σ == 1. && return ℓ_offspring(Z, n, R, 2, c, ρ)
+    R₁, R₂, R₃ = split_R(R, c₁, c₂, ρ₁, ρ₂)
+    loglik = sum(n) * ( log(1. + σ) - log(1. - σ) )
+    for i in eachindex(Z)
+        loglik += n[i] * log( (1. - c₁ - c₂) * 1. / R₁ * ( (R₁ / (1 + σ + R₁))^(Z[i] + 1) - (σ * R₁ / (1. + σ + σ * R₁))^(Z[i] + 1) ) + 
+                        c₁ * 1. / R₂ * ( (R₂ / (1 + σ + R₂))^(Z[i] + 1) - (σ * R₂ / (1. + σ + σ * R₂))^(Z[i] + 1) ) +
+                            c₂ * 1. / R₃ * ( (R₃ / (1 + σ + R₃))^(Z[i] + 1) - (σ * R₃ / (1. + σ + σ * R₃))^(Z[i] + 1) ))
     end
     return loglik
 end
@@ -99,6 +113,13 @@ end
 function ℓ(prob::TwoTypeOffspring, R, σ, c, ρ)
     @unpack Z, n = prob
     return ℓ_variable(Z, n, R, σ, c, ρ)
+end
+
+
+# Three-type variable model
+function ℓ(prob::ThreeTypeOffspring, R, σ, c₁, c₂, ρ₁, ρ₂)
+    @unpack Z, n = prob
+    return ℓ_variable(Z, n, R, σ, c₁, c₂, ρ₁, ρ₂)
 end
 
 
@@ -272,6 +293,17 @@ function fit_mle(prob::TwoTypeOffspring)
     opt.xtol_rel = 1e-4
     opt.max_objective = (x,grad) -> ℓ(prob, x...)
     return NLopt.optimize(opt, [Z' * n / sum(n), 0.1, 0.1, 0.01])
+end
+
+
+function fit_mle(prob::ThreeTypeOffspring)
+    @unpack Z, n = prob
+    opt = Opt(:LN_SBPLX, 6)
+    opt.lower_bounds = [0., 0., eps(), eps(), eps(), eps()]
+    opt.upper_bounds = [Inf, 0.01, 1. - eps(), 1. - eps(), 1. - eps(), 1. - eps()]
+    opt.xtol_rel = 1e-4
+    opt.max_objective = (x,grad) -> ℓ(prob, x...)
+    return NLopt.optimize(opt, [Z' * n / sum(n), 0.0, 0.1, 0.1, 0.2, 0.2])
 end
 
 

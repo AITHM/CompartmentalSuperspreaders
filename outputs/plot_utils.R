@@ -37,6 +37,21 @@ read_output = function(output, output_dir="./outputs/offspring/baseline/"){
 }
 
 
+append_ΔAICc = function(scores){
+  ΔAICc = scores %>% group_by(Label) %>% summarize(Model = Model, ΔAICc = AICc - min(AICc))
+  return(left_join(scores, ΔAICc))
+}
+
+
+append_Δl_max = function(scores){
+  Δl_max = scores %>% group_by(Label) %>% summarize(Model = Model, Δl_max = ℓₘₐₓ - max(ℓₘₐₓ))
+  return(left_join(scores, Δl_max))
+}
+
+compartmental_models = c("Two-type", "Clinical", "SEIR(2)", "Single-type", "SEIR(1)")
+all_models = c("Negative Binomial", compartmental_models)
+
+
 ### Aesthetic conventions ###
 pathogen_levels = c("SARS-CoV-2", "SARS-CoV-1", "Smallpox", "EBV", "MERS-CoV", "Mpox", "Measles", "Tuberculosis")
 pathogen_levels = factor(pathogen_levels, levels = pathogen_levels)
@@ -61,8 +76,8 @@ scale_col_pathogen <- function(...){
 }
 
 
-offspring_labels = c("Batam, 2020 (n=89)", "China, 2020 (n=1,178)","China, 2020 (n=2,048)","Hong Kong, 2020 (n=290)",  
-                     "India, 2020 (n=88,527)", "Jakarta, 2020 (n=1,199)", "Sth. Korea, 2021 (n=344)", "Sth. Korea, 2021 (n=1,401)", 
+offspring_labels = c("Batam, 2020 (n=89)", "China, 2020(a) (n=1,178)","China, 2020(b) (n=2,048)","Hong Kong, 2020 (n=290)",  
+                     "India, 2020 (n=88,527)", "Jakarta, 2020 (n=1,199)", "Sth. Korea, 2021(a) (n=344)", "Sth. Korea, 2021(b) (n=1,401)", 
                      "Beijing, 2003 (n=33)", "Singapore, 2003 (n=57)", "Europe, 1958-73 (n=32)", "England, 1966 (n=25)", 
                      "Guinea, 2014 (n=152)", "Rep. of Korea, 2015 (n=185)", "Zaire, 1980-84 (n=147)", "Victoria, 2005-15 (n=2,311)")
 
@@ -179,7 +194,7 @@ scale_shape_model <- function(...){
 scale_col_model <- function(...){
   ggplot2:::manual_scale(
     'col', 
-    values = setNames(c("#1B1919", "#00468B", "#ADB6B6", "#925E9F", "#AD002A", "#008B45FF", "#0099B4"), model_levels), 
+    values = setNames(c("#1B1919", "#00468B", "#A73030FF", "#925E9F", "#AD002A", "#008B45FF", "#0099B4"), model_levels), 
     ...
   )
 }

@@ -24,8 +24,8 @@ include(".\\utils\\general.jl")
 include(".\\utils\\extinction.jl")
 include(".\\utils\\printmat.jl")
 include(".\\offspring.jl")
-export ℓ, ℓ_offspring, Solution, NegBinParameters, SEIR1Parameters, ZeroInfParameters, SEIR2Parameters, ClinicalParameters, SingleTypeParameters, TwoTypeParameters,
-NegBinOffspring, SEIR1Offspring, ZeroInfOffspring, SEIR2Offspring, ClinicalOffspring, SingleTypeOffspring, TwoTypeOffspring,
+export ℓ, ℓ_offspring, Solution, NegBinParameters, SEIR1Parameters, ZeroInfParameters, SEIR2Parameters, ClinicalParameters, SingleTypeParameters, TwoTypeParameters, ThreeTypeParameters
+NegBinOffspring, SEIR1Offspring, ZeroInfOffspring, SEIR2Offspring, ClinicalOffspring, SingleTypeOffspring, TwoTypeOffspring, ThreeTypeOffspring,
 fit_mcmc, fit_mle, fit, fit_ensemble, predict
 
 end # module CompartmentalSuperspreaders

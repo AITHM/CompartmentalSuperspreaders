@@ -23,6 +23,15 @@ function split_R(R, c, ρ)
     return [R₁, R₂]
 end
 
+
+function split_R(R, c₁, c₂, ρ₁, ρ₂)
+    R₃ = R / ((1. - c₁ - c₂) * ρ₁ * ρ₂ + c₁ * ρ₂ + c₂)
+    R₂ = ρ₂ * R₃
+    R₁ = ρ₁ * R₂
+    return [R₁, R₂, R₃]
+end
+
+
 """
     get_p(c, R, ρ, α)
 
