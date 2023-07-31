@@ -43,6 +43,14 @@ function get_p(R, c, ρ, α)
 end
 
 
+function get_p(R, c₁, c₂, ρ₁, ρ₂, α)
+    R₃ = R / (α * ((1. - c₁ - c₂) * ρ₁ * ρ₂ + c₁ * ρ₂ + c₂))
+    R₂ = ρ₂ * R₃
+    R₁ = ρ₁ * R₂
+    return [(1. + R₁)^(-1), (1. + R₂)^(-1), (1. + R₃)^(-1)]
+end
+
+
 """
     compute_scores(ℓₘₐₓ, n_pars, n_obs)
 

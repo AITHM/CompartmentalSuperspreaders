@@ -36,6 +36,12 @@ plot_fit(offspring, model_fits, score_summary, models=c("Negative Binomial", "Tw
 ggsave(paste0(output_dir, "offspring_fits.png"), dpi=600, width=14, height=14)
 
 
+plot_fit(offspring, model_fits, score_summary, models=c("Negative Binomial", "Clinical"))  +
+  guides(fill = guide_legend(nrow=4),
+         col = guide_legend(nrow=2))
+ggsave(paste0(output_dir, "clinical_fits.png"), dpi=600, width=14, height=14)
+
+
 
 
 #### Parameter plots ####
@@ -56,10 +62,11 @@ ggsave(paste0(output_dir, "k_negbin.png"), dpi=600, width=12, height=7.5)
 
 plot_parameter(parms_summary, "R", ylabel="Reproductive number (R)", models=all_models) +
     geom_hline(yintercept = 1, lty=2, lwd=1) +
-  guides(col = guide_legend(nrow=4))
+  theme(legend.position = "right") 
+  # guides(col = guide_legend(nrow=4))
 
 
-ggsave(paste0(output_dir, "R_estimates.png"), dpi=600, width=12, height=7.5)
+ggsave(paste0(output_dir, "R_estimates.png"), dpi=600, width=16, height=8)
 
 
 
@@ -73,7 +80,7 @@ ggplot(parms_summary %>% filter(Parameter %in% c("c", "ρ"), Model %in% c("Two-t
   geom_linerange(aes(ymin = X2.5., ymax=X97.5.),position=position_dodge2(width=0.75), lwd=2, alpha=0.3) +
   geom_linerange(aes(ymin = X25., ymax=X75.), position=position_dodge2(width=0.75), lwd=2, alpha=0.6) +
   geom_point(aes(y=X50.), position=position_dodge2(width=0.75), size=3) +
-  facet_grid(Parameter ~ ., labeller=labeller(Parameter = c(c="Superspreader\nfraction, c", ρ="Relative\ntransmissibility, ρ"))) +
+  facet_grid(Parameter ~ ., labeller=labeller(Parameter = c(c="Superspreader\nfraction (c)", ρ="Relative\ntransmissibility (ρ)"))) +
   xlab("") +
   ylab("") +
   custom_theme + theme(axis.text.x = element_text(angle = 60, hjust=1), legend.position = c(0.2,0.65)) +
@@ -101,7 +108,7 @@ ggsave(paste0(output_dir, "sigma.png"), dpi=600, width=12, height=7.5)
 plot_extinction(full_chain, models=all_models)
 
 
-ggsave(paste0(output_dir, "q_estimates.png"), dpi=600, width=12, height=7.5)
+ggsave(paste0(output_dir, "q_estimates.png"), dpi=600, width=16, height=8)
 
 
 
@@ -224,50 +231,65 @@ ggplot(parms_all %>% dplyr::filter(Model %in% "SEIR(2)", Parameter %in% c("c", "
 
 #### Tables ####
 ### Score table
-# number_sigificant = 4
-score_table = score_summary %>% dplyr::select(Pathogen, Location, n_obs, Model, ℓₘₐₓ, BIC, AIC, AICc, w)
-# score_table = score_table %>% mutate_at(vars(BIC, AIC, AICc, w), funs(signif(., 4)))
-# score_table = max_bold(score_table, "w")
-score_table = remove_duplicates(score_table, "n_obs")
-covid_table = score_table %>% dplyr::filter(Pathogen == "SARS-CoV-2")
-make_output_table(covid_table, "Scores_table_covid.tex", "rllrcrrrrr", c(0,0,0,0,0,1,1,1,1,3))
-not_covid_table = score_table %>% dplyr::filter(Pathogen != "SARS-CoV-2")
-make_output_table(not_covid_table, "Scores_table_not_covid.tex", "rllrcrrrrr", c(0,0,0,0,0,1,1,1,1,3))
+score_summary %>% filter(Pathogen == "SARS-CoV-2") %>% make_score_table()
+score_summary %>% filter(Pathogen != "SARS-CoV-2") %>% make_score_table()
 
 ### Parameters table
-parms_summary_table = parms_summary %>% dplyr::select(Pathogen, Location, Model, Parameter, mle, X2.5., X25., X50., X75., X97.5., ess, Rhat) %>%
-  dplyr::filter(Model %in% c("Negative Binomial", "Mixture")) 
-# parms_summary_table = parms_summary_table %>% mutate_at(vars(mle, X2.5., X25., X50., X75., X97.5., ess, Rhat), funs(signif(., 4)))
-covid_table = parms_summary_table %>% dplyr::filter(Pathogen == "SARS-CoV-2")
-make_output_table(covid_table, "Parameters_table_covid.tex", "llccrrrrrrrrr", c(0, 0, 0, 0, 0, 3, 3, 3, 3, 3, 3, 0, 4))
-not_covid_table = parms_summary_table %>% dplyr::filter(Pathogen != "SARS-CoV-2")
-make_output_table(not_covid_table, "Parameters_table_not_covid.tex", "llccrrrrrrrrr", c(0, 0, 0, 0, 0, 3, 3, 3, 3, 3, 3, 0, 4))
-
-#parms_table = parms_summary %>%
-  #dplyr::select(Pathogen, Location, Model, Parameter, mle, X2.5., X25., X50., X75., X97.5., ess, Rhat) %>%
-  #dplyr::filter(Model %in% c("Negative Binomial", "Mixture")) %>%
-  #xtable(include.rownames=FALSE)
+parms_summary %>% filter(Pathogen == "SARS-CoV-2", Model %in% c("Negative Binomial", "Two-type")) %>% make_params_table()
+parms_summary %>% filter(Pathogen != "SARS-CoV-2", Model %in% c("Negative Binomial", "Two-type")) %>% make_params_table()
 
 
-#### Posterior plots ###
-## Plot  R v. α
 
-plot_pairs(full_chain, "R", "α", model="Negative Binomial", xlabel="Reproduction number", ylabel="Dispersion parameter (k)") +
-  scale_x_continuous(limits=c(0, 8), expand=c(0,0)) +
-  scale_y_continuous(trans="log10", limits = c(0.01, 12.)) +
-  geom_vline(xintercept=1, lty=2)
+three_type_scores = read_output("threetype_scores")
+three_type_scores = rbind(three_type_scores, (score_summary %>% filter(Model == "Negative Binomial"))[, c(1:11,13)])
+three_type_scores = append_ΔAICc(three_type_scores) %>% arrange(Dataset, Model)
+three_type_scores = append_w(three_type_scores)
 
 
-ggsave(paste0(output_dir, "R_v_k_posterior.png"), dpi=600, height=10, width=16)
+
+three_type_scores %>% make_score_table()
 
 
-## Plot R v. c
-
-plot_pairs(full_chain, "R", "c", model="Two-type", xlabel="Reproduction number, R", ylabel="Superspreader fraction, c") +
-  geom_vline(xintercept=1, lty=2)
 
 
-ggsave(paste0(output_dir, "R_v_c_posterior.png"), dpi=600, height=10, width=16)
+
+score_summary$k = 1
+sensk2_scores = read_output("score_summary", output_dir =  "./outputs/offspring/k2/")
+sensk2_scores$k = 2
+sensk3_scores = read_output("score_summary", output_dir =  "./outputs/offspring/k3/")
+sensk3_scores$k = 3
+
+all_scores = rbind(score_summary, sensk2_scores, sensk3_scores)
+all_scores$k = factor(all_scores$k)
+
+all_scores %>% 
+  filter(Model == "SEIR(2)") %>%
+  group_by(Dataset) %>%
+  mutate(Rel = AICc - min(AICc)) %>%
+  ungroup() %>%
+ggplot(aes(x = Label, shape=k, y=Rel)) +
+  geom_col(aes(fill = k), position=position_dodge2(width=0.75)) +
+  # geom_point(size=2, position=position_dodge2(width=0.75)) +
+  xlab("") +
+  ylab("") +
+  custom_theme + theme(axis.text.x = element_text(angle = 60, hjust=1), legend.position="right") +
+  scale_col_pathogen()
 
 
+all_scores %>% 
+  filter(Model == "SEIR(2)") %>%
+  group_by(Dataset) %>%
+  mutate(Rel = AICc - min(AICc)) %>%
+  ungroup() %>%
+  ggplot(aes(x = k,  y=Rel)) +
+  geom_col(aes(fill = Pathogen), position=position_dodge2(width=0.75)) +
+  facet_wrap(Label ~ ., scales="free") +
+  # geom_point(size=2, position=position_dodge2(width=0.75)) +
+  xlab("Serial compartments") +
+  ylab("Absolute change in AICc") +
+  custom_theme +
+  scale_col_pathogen()
+
+
+ggsave(paste0(output_dir, "k_sensitivity_AICc.png"), dpi=600, width=14, height=14)
 

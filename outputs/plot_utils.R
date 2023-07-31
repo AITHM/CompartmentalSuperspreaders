@@ -43,6 +43,12 @@ append_ΔAICc = function(scores){
 }
 
 
+append_w = function(scores){
+  w = scores %>% group_by(Label) %>% summarize(Model = Model, w = exp(-0.5 * ΔAICc) / sum(exp(-0.5 * ΔAICc)) )
+  return(left_join(scores, w))
+}
+
+
 append_Δl_max = function(scores){
   Δl_max = scores %>% group_by(Label) %>% summarize(Model = Model, Δl_max = ℓₘₐₓ - max(ℓₘₐₓ))
   return(left_join(scores, Δl_max))
@@ -166,7 +172,7 @@ relabel_clusters = function(x, levels=cluster_labels){
 }
 
 
-model_levels = c("Negative Binomial", "Two-type",  "SEIR(2)", "Zero-inflated", "Clinical", "Single-type", "SEIR(1)")
+model_levels = c("Negative Binomial", "Two-type",  "SEIR(2)", "Zero-inflated", "Clinical", "Single-type", "SEIR(1)", "Three-type", "SEIR(3)")
 
 
 relabel_model = function(x, levels=model_levels){
@@ -178,7 +184,9 @@ relabel_model = function(x, levels=model_levels){
             x == "SingleType" ~ levels[6],
             x == "TwoType" ~ levels[2],
             x == "Variable1" ~ levels[6],
-            x == "Variable2" ~ levels[2]) %>% factor(levels)
+            x == "Variable2" ~ levels[2],
+            x == "ThreeType" ~ levels[8],
+            x == "SEIR3" ~ levels[9]) %>% factor(levels)
 }
 
 

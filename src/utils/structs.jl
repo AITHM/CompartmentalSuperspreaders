@@ -88,6 +88,15 @@ struct ThreeTypeParameters <: Parameters
 end
 
 
+struct SEIR3Parameters <: Parameters
+    R::Float64
+    c₁::Float64
+    c₂::Float64
+    ρ₁::Float64
+    ρ₂::Float64
+end
+
+
 function extract_values(parms::T) where T <: Parameters
     return [getfield(parms, fname) for fname in fieldnames(T)]
 end 
@@ -315,3 +324,14 @@ end
 
 ThreeTypeOffspring(df::DataFrame) = ThreeTypeOffspring(df.Z, df.n)
 ThreeTypeOffspring(df::DataFrame, α, c) = ThreeTypeOffspring(df.Z, df.n)
+
+
+## SEIR3 model
+struct SEIR3Offspring <: OffspringProblem
+    Z::Vector{Int64}     # offspring
+    n::Vector{Int64}     # frequency of Z
+    α::Int64             # SEIR1 shape parameter
+end
+
+SEIR3Offspring(df::DataFrame, α) = SEIR3Offspring(df.Z, df.n, α)
+SEIR3Offspring(df::DataFrame, α, c) = SEIR3Offspring(df.Z, df.n, α)

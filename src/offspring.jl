@@ -31,6 +31,17 @@ function ℓ_offspring(Z, n, R, α, c, ρ)
 end
 
 
+function ℓ_offspring(Z, n, R, α, c₁, c₂, ρ₁, ρ₂)
+    p = get_p(R, c₁, c₂, ρ₁, ρ₂, α)
+    loglik = -sum(n) * loggamma(α)
+    for l in eachindex(Z)
+        s = (1. - c₁ - c₂) * p[1]^α * (1 - p[1])^Z[l] + c₁ * p[2]^α * (1 - p[2])^Z[l] + c₂ * p[3]^α * (1 - p[3])^Z[l]
+        loglik += n[l] * (log(s) + loggamma(Z[l] + α) - logfactorial(Z[l]))
+    end
+    return loglik
+end
+
+
 # Single-type variable
 function ℓ_variable(Z, n, R, σ)
     loglik = sum(n) * ( log(1. + σ) - log(1. - σ) - log(R) )
@@ -120,6 +131,13 @@ end
 function ℓ(prob::ThreeTypeOffspring, R, σ, c₁, c₂, ρ₁, ρ₂)
     @unpack Z, n = prob
     return ℓ_variable(Z, n, R, σ, c₁, c₂, ρ₁, ρ₂)
+end
+
+
+# SEIR(3) model
+function ℓ(prob::SEIR3Offspring, R, c₁, c₂, ρ₁, ρ₂)
+    @unpack Z, n, α = prob
+    return ℓ_offspring(Z, n, R, α, c₁, c₂, ρ₁, ρ₂)
 end
 
 
@@ -304,6 +322,17 @@ function fit_mle(prob::ThreeTypeOffspring)
     opt.xtol_rel = 1e-4
     opt.max_objective = (x,grad) -> ℓ(prob, x...)
     return NLopt.optimize(opt, [Z' * n / sum(n), 0.0, 0.1, 0.1, 0.2, 0.2])
+end
+
+
+function fit_mle(prob::SEIR3Offspring)
+    @unpack Z, n, α = prob
+    opt = Opt(:LN_SBPLX, 5)
+    opt.lower_bounds = [0., eps(), eps(), eps(), eps()]
+    opt.upper_bounds = [Inf, 1. - eps(), 1. - eps(), 1. - eps(), 1. - eps()]
+    opt.xtol_rel = 1e-4
+    opt.max_objective = (x,grad) -> ℓ(prob, x...)
+    return NLopt.optimize(opt, [Z' * n / sum(n), 0.1, 0.1, 0.2, 0.2])
 end
 
 
