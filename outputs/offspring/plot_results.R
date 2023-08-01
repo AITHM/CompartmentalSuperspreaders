@@ -1,5 +1,6 @@
 # Import utils and load required libraries
 source("outputs/plot_utils.R")
+source("outputs/table_utils.R")
 
 
 ### Data imports ###
@@ -63,18 +64,12 @@ ggsave(paste0(output_dir, "k_negbin.png"), dpi=600, width=12, height=7.5)
 plot_parameter(parms_summary, "R", ylabel="Reproductive number (R)", models=all_models) +
     geom_hline(yintercept = 1, lty=2, lwd=1) +
   theme(legend.position = "right") 
-  # guides(col = guide_legend(nrow=4))
-
 
 ggsave(paste0(output_dir, "R_estimates.png"), dpi=600, width=16, height=8)
 
 
 
 ### Superspreader fraction + relative transmissibility ###
-
-plot_parameter(parms_summary, c("c", "ρ"), ylabel="Superspreader fraction (c)\nRelative transmissibility (ρ)", models=c("Two-type")) +
-  guides(col = guide_legend(nrow=4))
-
 
 ggplot(parms_summary %>% filter(Parameter %in% c("c", "ρ"), Model %in% c("Two-type", "SEIR(2)")), aes(x=Label, col=Pathogen, shape=Model)) +
   geom_linerange(aes(ymin = X2.5., ymax=X97.5.),position=position_dodge2(width=0.75), lwd=2, alpha=0.3) +
@@ -245,35 +240,20 @@ three_type_scores = rbind(three_type_scores, (score_summary %>% filter(Model == 
 three_type_scores = append_ΔAICc(three_type_scores) %>% arrange(Dataset, Model)
 three_type_scores = append_w(three_type_scores)
 
-
-
 three_type_scores %>% make_score_table()
 
 
 
 
-
-score_summary$k = 1
+sensk1_scores = read_output("score_summary", output_dir =  "./outputs/offspring/baseline/")
+sensk1_scores$k = 1
 sensk2_scores = read_output("score_summary", output_dir =  "./outputs/offspring/k2/")
 sensk2_scores$k = 2
 sensk3_scores = read_output("score_summary", output_dir =  "./outputs/offspring/k3/")
 sensk3_scores$k = 3
 
-all_scores = rbind(score_summary, sensk2_scores, sensk3_scores)
+all_scores = rbind(sensk1_scores, sensk2_scores, sensk3_scores)
 all_scores$k = factor(all_scores$k)
-
-all_scores %>% 
-  filter(Model == "SEIR(2)") %>%
-  group_by(Dataset) %>%
-  mutate(Rel = AICc - min(AICc)) %>%
-  ungroup() %>%
-ggplot(aes(x = Label, shape=k, y=Rel)) +
-  geom_col(aes(fill = k), position=position_dodge2(width=0.75)) +
-  # geom_point(size=2, position=position_dodge2(width=0.75)) +
-  xlab("") +
-  ylab("") +
-  custom_theme + theme(axis.text.x = element_text(angle = 60, hjust=1), legend.position="right") +
-  scale_col_pathogen()
 
 
 all_scores %>% 

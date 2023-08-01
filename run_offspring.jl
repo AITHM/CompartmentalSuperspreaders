@@ -106,3 +106,30 @@ CSV.write("outputs\\offspring\\clinical_upper\\full_chain.csv", vcat(getfield.(o
 CSV.write("outputs\\offspring\\clinical_upper\\model_fit.csv", vcat(getfield.(offspring_out, 4)...))
 
 println(" done")
+
+
+
+# Run extended analysis for n_types = 3
+df = DataFrame(Dataset = Vector{String}(), 
+               Model = Vector{Symbol}(), 
+               n_obs = Vector{Int64}(), 
+               n_pars = Vector{Int64}(), 
+               ℓₘₐₓ = Vector{Float64}(), 
+               BIC = Vector{Float64}(), 
+               AIC = Vector{Float64}(), 
+               AICc = Vector{Float64}())
+
+for i in 1:16
+    data = CSV.read(".\\data\\offspring\\"*offspring_datasets[i]*".csv", DataFrame)
+    prob = ThreeTypeOffspring(data)
+    res = CompartmentalSuperspreaders.fit_mle(prob)
+    score = compute_scores(res[1], 6, sum(data.n))
+    push!(df, (offspring_datasets[i], :ThreeType, sum(data.n), 6, res[1], score[1], score[2],score[3]))
+
+    prob = SEIR3Offspring(data, 1)
+    res = CompartmentalSuperspreaders.fit_mle(prob)
+    score = compute_scores(res[1], 5, sum(data.n))
+    push!(df, (offspring_datasets[i], :SEIR3, sum(data.n), 5, res[1], score[1], score[2],score[3]))
+end
+
+CSV.write("outputs\\offspring\\baseline\\threetype_scores.csv", df)

@@ -193,7 +193,7 @@ relabel_model = function(x, levels=model_levels){
 scale_shape_model <- function(...){
   ggplot2:::manual_scale(
     'shape', 
-    values = setNames(c(19,17,3,25,15,18,4), model_levels), 
+    values = setNames(c(19,17,3,25,15,18,4, 1, 2), model_levels), 
     ...
   )
 }
@@ -202,7 +202,7 @@ scale_shape_model <- function(...){
 scale_col_model <- function(...){
   ggplot2:::manual_scale(
     'col', 
-    values = setNames(c("#1B1919", "#00468B", "#A73030FF", "#925E9F", "#AD002A", "#008B45FF", "#0099B4"), model_levels), 
+    values = setNames(c("#1B1919", "#00468B", "#A73030FF", "#925E9F", "#AD002A", "#008B45FF", "#0099B4", "#E18727", "#6F99AD"), model_levels), 
     ...
   )
 }
